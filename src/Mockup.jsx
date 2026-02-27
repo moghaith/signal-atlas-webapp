@@ -267,8 +267,6 @@ export default function Mockup() {
             background: `${COLORS.accent2}11`, border: `1px solid ${COLORS.accent2}33`,
             borderRadius: 8, fontSize: 12, color: COLORS.muted,
           }}>
-            <strong style={{ color: COLORS.accent2 }}>Security note: </strong>
-            All endpoints return only the fields required for this page. No full table dumps are sent to the client — keeping responses lightweight and database access minimal and secure.
           </div>
         </div>
       </div>
