@@ -32,9 +32,9 @@ const pages = [
       { area: "RSRQ Chart", h: 150, col: "3 / 5", note: "Line chart — RSRQ over time with threshold reference line", accent: COLORS.accent2 },
     ],
     apis: [
-      { method: "GET", endpoint: "/api/devices", description: "Returns list of all device IDs for the selector dropdown.", response: "[ device_id, ... ]" },
-      { method: "GET", endpoint: "/api/readings/latest?device_id={id}", description: "Single most recent reading for the selected device. Populates stat cards and device info.", response: "{ device_id, timestamp, rsrp, rssi, rsrq, asu, level, operator, network_type, physical_cell_id, tracking_area_code, latitude, longitude }" },
-      { method: "GET", endpoint: "/api/readings/history?device_id={id}&limit=50", description: "Last N readings for time-series charts. Only signal fields returned.", response: "[ { timestamp, rsrp, rssi, rsrq, asu, level }, ... ]" },
+      { method: "GET", endpoint: "/api/devices", description: "Returns list of all devices with reading count and last reading time.", response: "[{ device_id, last_reading, reading_count }]" },
+      { method: "GET", endpoint: "/api/network-data/{device_id}?limit=1", description: "Latest reading for stat cards and device info. Returns newest first.", response: "[{ id, device_id, timestamp, rsrp, rssi, rsrq, asu, level, operator, network_type, cell_id, physical_cell_id, tracking_area_code, latitude, longitude }]" },
+      { method: "GET", endpoint: "/api/network-data/{device_id}?limit=50", description: "Last N readings for time-series charts. Stats computed client-side.", response: "[{ timestamp, rsrp, rssi, rsrq, asu, level, ... }]" },
     ],
   },
   {
@@ -53,8 +53,8 @@ const pages = [
       { area: "Raw Readings Table — paginated", h: 190, col: "1 / -1", note: "Timestamp · RSRP · RSSI · RSRQ · ASU · Level · Network Type", accent: COLORS.muted },
     ],
     apis: [
-      { method: "GET", endpoint: "/api/readings/history?device_id={id}", description: "Full reading history. Used for all four charts and the table.", response: "[ { timestamp, rsrp, rssi, rsrq, asu, level, operator, network_type }, ... ]" },
-      { method: "GET", endpoint: "/api/devices/{id}/info", description: "Static device metadata for the identity card.", response: "{ device_id, operator, network_type, cell_id, physical_cell_id, tracking_area_code }" },
+      { method: "GET", endpoint: "/api/network-data/{device_id}?limit=1000", description: "Full reading history. Used for all four charts and the table. Stats computed client-side.", response: "[{ id, timestamp, rsrp, rssi, rsrq, asu, level, operator, network_type, cell_id, physical_cell_id, tracking_area_code }]" },
+      { method: "GET", endpoint: "/api/network-data/{device_id}?limit=1", description: "Latest reading for the identity card metadata.", response: "[{ device_id, operator, network_type, cell_id, physical_cell_id, tracking_area_code }]" },
     ],
   },
   {
@@ -70,8 +70,8 @@ const pages = [
       { area: "Legend — signal quality color key", h: 56, col: "1 / -1", note: "Green: Excellent  ·  Yellow: Fair  ·  Red: Poor  ·  Grey: No data", accent: COLORS.muted },
     ],
     apis: [
-      { method: "GET", endpoint: "/api/readings/locations", description: "One row per device — latest lat, lng, signal level, device_id only. Lightweight endpoint for placing markers.", response: "[ { device_id, latitude, longitude, level, rsrp }, ... ]" },
-      { method: "GET", endpoint: "/api/readings/latest?device_id={id}", description: "Called on marker click. Returns full latest reading to populate the side panel.", response: "{ device_id, rsrp, rssi, rsrq, asu, operator, network_type, timestamp }" },
+      { method: "GET", endpoint: "/api/devices + /api/network-data/{id}?limit=1", description: "Get all devices, then fetch latest reading per device for lat/lng/signal. Markers placed from this data.", response: "[{ device_id, latitude, longitude, level, rsrp, operator }]" },
+      { method: "GET", endpoint: "/api/network-data/{device_id}?limit=1", description: "Called on marker click. Returns full latest reading to populate the side panel.", response: "[{ device_id, rsrp, rssi, rsrq, asu, operator, network_type, timestamp }]" },
     ],
   },
   {
@@ -92,9 +92,9 @@ const pages = [
       { area: "Export as CSV", h: 48, col: "1 / -1", note: "Downloads current query result as .csv file", accent: COLORS.accent3 },
     ],
     apis: [
-      { method: "GET", endpoint: "/api/readings?device_id={id}&from={date}&to={date}&fields=timestamp,rsrp,rssi,rsrq,asu,level", description: "Filtered readings for the selected device and date range. Only requested fields returned.", response: "[ { timestamp, rsrp, rssi, rsrq, asu, level }, ... ]" },
-      { method: "GET", endpoint: "/api/readings/stats?device_id={id}&from={date}&to={date}", description: "Pre-computed summary stats (min, max, avg, std). Computed server-side.", response: "{ rsrp: { min, max, avg, std }, rssi: {...}, rsrq: {...}, asu: {...} }" },
-      { method: "GET", endpoint: "/api/readings/export?device_id={id}&from={date}&to={date}", description: "Returns a CSV file download of the filtered readings.", response: "text/csv file" },
+      { method: "GET", endpoint: "/api/network-data/{device_id}?limit=1000", description: "Full reading history for the device. Date filtering and field selection done client-side.", response: "[{ timestamp, rsrp, rssi, rsrq, asu, level, ... }]" },
+      { method: "—", endpoint: "Client-side computation", description: "Stats (min, max, avg, std) computed in browser from fetched readings using getReadingStats().", response: "{ rsrp: { min, max, avg, std }, rssi: {...}, rsrq: {...}, asu: {...} }" },
+      { method: "—", endpoint: "Client-side CSV export", description: "CSV generated in browser from fetched data and downloaded via Blob URL.", response: "text/csv file" },
     ],
   },
 ];

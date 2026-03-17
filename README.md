@@ -1,3 +1,13 @@
+# Environment
+
+Set these in `.env.local` for Supabase mode:
+
+```env
+VITE_API_MODE=supabase
+VITE_SUPABASE_URL=https://lxsnfitbbbfbignmxsdk.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+```
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
