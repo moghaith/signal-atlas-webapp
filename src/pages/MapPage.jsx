@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Header from "../components/Header/Header";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -6,32 +6,95 @@ import "leaflet.heat";
 import useDeviceData from "../hooks/useDeviceData";
 import "./MapPage.css";
 
-function HeatLayer({ points }) {
-  const map = useMap();
+const SHARED_HEAT_GRADIENT = {
+  0.0: "#1d4ed8",
+  0.25: "#2563eb",
+  0.5: "#06b6d4",
+  0.75: "#84cc16",
+  1.0: "#facc15",
+};
 
-  const toIntensity = (rsrp) => {
-    if (rsrp == null) return 0.35;
-    return Math.max(0.2, Math.min(1, (Number(rsrp) + 130) / 50));
-  };
+function getRegionLabel(point) {
+  if (point?.region_label) return point.region_label;
+  const city = String(point?.city || "").trim();
+  const country = String(point?.country || "").trim();
+  if (city && country) return `${city}, ${country}`;
+  if (city) return city;
+  if (country) return country;
+  return "Unknown region";
+}
+
+function metricToIntensity(metric, value) {
+  if (value == null || !Number.isFinite(Number(value))) return 0.2;
+  const v = Number(value);
+
+  if (metric === "rsrq") {
+    return Math.max(0.1, Math.min(1, (v + 20) / 17));
+  }
+
+  return Math.max(0.1, Math.min(1, (v + 125) / 45));
+}
+
+function HeatLayer({ points, metric }) {
+  const map = useMap();
 
   useEffect(() => {
     if (!map || !points.length) return undefined;
 
-    const heatData = points
-      .filter((point) => point?.latitude != null && point?.longitude != null)
-      .map((point) => [point.latitude, point.longitude, toIntensity(point.rsrp)]);
+    const byCoordinate = new Map();
+    for (const point of points) {
+      if (point?.latitude == null || point?.longitude == null) continue;
+      const lat = Number(point.latitude);
+      const lng = Number(point.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+      const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      const existing = byCoordinate.get(key) || {
+        lat,
+        lng,
+        sum: 0,
+        count: 0,
+        density: 0,
+      };
+
+      existing.density += 1;
+
+      if (metric !== "density") {
+        const metricValue = Number(point[metric]);
+        if (Number.isFinite(metricValue)) {
+          existing.sum += metricValue;
+          existing.count += 1;
+        }
+      }
+
+      byCoordinate.set(key, existing);
+    }
+
+    const grouped = Array.from(byCoordinate.values());
+    const maxDensity = grouped.reduce((max, row) => Math.max(max, row.density), 1);
+
+    const heatData = grouped.map((entry) => {
+      if (metric === "density") {
+        const densityIntensity = Math.max(0.1, Math.min(1, entry.density / maxDensity));
+        return [entry.lat, entry.lng, densityIntensity];
+      }
+
+      const avg = entry.count > 0 ? entry.sum / entry.count : null;
+      return [entry.lat, entry.lng, metricToIntensity(metric, avg)];
+    });
 
     const layer = L.heatLayer(heatData, {
-      radius: 20,
-      blur: 14,
+      radius: 28,
+      blur: 20,
       maxZoom: 17,
       minOpacity: 0.35,
+      gradient: SHARED_HEAT_GRADIENT,
     }).addTo(map);
 
     return () => {
       map.removeLayer(layer);
     };
-  }, [map, points]);
+  }, [map, metric, points]);
 
   return null;
 }
@@ -66,13 +129,12 @@ function getQuality(point) {
 
 function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
   const {
-    devices,
-    selectedDevice,
-    setSelectedDevice,
+    regions,
+    selectedRegion,
+    setSelectedRegion,
     mapPoints,
     heatmapPoints,
     predictionPoints,
-    readings,
     selectedPoint,
     setSelectedPoint,
     loading,
@@ -80,34 +142,27 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
     refresh,
   } = useDeviceData(apiMode);
 
-  const [showAllDevices, setShowAllDevices] = useState(false);
+  const [showAllRegions, setShowAllRegions] = useState(false);
   const [showAllReadings, setShowAllReadings] = useState(true);
   const [showHeatView, setShowHeatView] = useState(false);
   const [showPredictions, setShowPredictions] = useState(false);
+  const [heatMetric, setHeatMetric] = useState("rsrp");
 
-  const pointsToRender = showAllDevices
+  const pointsToRender = showAllRegions
     ? mapPoints
-    : mapPoints.filter((point) => point.device_id === selectedDevice);
+    : mapPoints.filter((point) => getRegionLabel(point) === selectedRegion);
 
-  const allReadingPoints = showAllDevices
+  const allReadingPoints = showAllRegions
     ? heatmapPoints
-    : heatmapPoints.filter((point) => point.device_id === selectedDevice);
+    : heatmapPoints.filter((point) => getRegionLabel(point) === selectedRegion);
 
   const displayedPoints = showAllReadings ? allReadingPoints : pointsToRender;
 
   const predictionPointsForView = useMemo(() => {
-    if (showAllDevices) return predictionPoints;
-    if (!selectedDevice) return predictionPoints;
-
-    const matched = predictionPoints.filter(
-      (point) =>
-        point?.target_device_id === selectedDevice ||
-        point?.predicted_for === selectedDevice ||
-        point?.device_id === selectedDevice
-    );
-
-    return matched.length > 0 ? matched : predictionPoints;
-  }, [predictionPoints, selectedDevice, showAllDevices]);
+    if (showAllRegions) return predictionPoints;
+    if (!selectedRegion) return predictionPoints;
+    return predictionPoints.filter((point) => getRegionLabel(point) === selectedRegion);
+  }, [predictionPoints, selectedRegion, showAllRegions]);
 
   const dedupedPredictionMarkers = useMemo(() => {
     const coordMap = new Map();
@@ -129,7 +184,6 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
     return [...displayedPoints, ...predictionPointsForView];
   }, [displayedPoints, predictionPointsForView, showPredictions]);
 
-  // Deduplicate to best RSRP reading per unique coordinate for rendering
   const dedupedMarkers = useMemo(() => {
     const coordMap = new Map();
     for (const point of displayedPoints) {
@@ -154,14 +208,14 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
       .map((point) => `${point.latitude.toFixed(6)},${point.longitude.toFixed(6)}`)
   ).size;
 
-  const selectedDevicePoint = mapPoints.find((point) => point.device_id === selectedDevice) || null;
-  const sidePanelPoint = selectedPoint || displayedPoints[0] || selectedDevicePoint || pointsToRender[0] || null;
+  const selectedRegionPoint = pointsToRender[0] || null;
+  const sidePanelPoint = selectedPoint || displayedPoints[0] || selectedRegionPoint || null;
 
   const mapCenter = sidePanelPoint
     ? [sidePanelPoint.latitude, sidePanelPoint.longitude]
     : [30.0444, 31.2357];
 
-  const mapKey = `${mapCenter[0]}-${mapCenter[1]}-${showAllDevices}-${selectedDevice}`;
+  const mapKey = `${mapCenter[0]}-${mapCenter[1]}-${showAllRegions}-${selectedRegion}`;
 
   return (
     <div className="page">
@@ -170,9 +224,9 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
         onNavigate={onNavigate}
         onRefresh={refresh}
         loading={loading}
-        devices={devices}
-        selectedDevice={selectedDevice}
-        onDeviceChange={setSelectedDevice}
+        regions={regions}
+        selectedRegion={selectedRegion}
+        onRegionChange={setSelectedRegion}
         apiMode={apiMode}
         onApiModeChange={onApiModeChange}
       />
@@ -182,8 +236,8 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
           <span className="page-tag">Page 03</span>
           <h2>Map View</h2>
           <p>
-            Geographic view of device signal samples. Markers are color-coded by quality; click a marker to
-            inspect its details in the side panel.
+            Regional map analytics for signal quality. Heat mode supports average RSRP, average RSRQ,
+            or measurement density with a shared blue-to-yellow palette.
           </p>
         </section>
 
@@ -191,10 +245,10 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
           <label className="map-toggle">
             <input
               type="checkbox"
-              checked={showAllDevices}
-              onChange={(e) => setShowAllDevices(e.target.checked)}
+              checked={showAllRegions}
+              onChange={(e) => setShowAllRegions(e.target.checked)}
             />
-            <span>Show all devices</span>
+            <span>Show all regions</span>
           </label>
 
           <label className="map-toggle">
@@ -215,6 +269,19 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
             <span>Heat view overlay</span>
           </label>
 
+          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Heat metric</span>
+            <select
+              className="header-device-select"
+              value={heatMetric}
+              onChange={(e) => setHeatMetric(e.target.value)}
+            >
+              <option value="rsrp">RSRP (avg)</option>
+              <option value="rsrq">RSRQ (avg)</option>
+              <option value="density">Density</option>
+            </select>
+          </div>
+
           <label className="map-toggle">
             <input
               type="checkbox"
@@ -234,6 +301,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
           <span><strong>Unique coordinates:</strong> {uniqueCoordinatesCount}</span>
           <span><strong>Shown markers:</strong> {dedupedMarkers.length}</span>
           <span><strong>Predictions:</strong> {showPredictions ? dedupedPredictionMarkers.length : 0}</span>
+          <span><strong>Heat metric:</strong> {heatMetric.toUpperCase()}</span>
         </section>
 
         {error && (
@@ -247,7 +315,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
           <div className="map-canvas">
             {loading && <p className="map-status">Loading map points...</p>}
             {!loading && displayedPoints.length === 0 && (
-              <p className="map-status">No map points available for the selected device view.</p>
+              <p className="map-status">No map points available for the selected region view.</p>
             )}
 
             {!loading && displayedPoints.length > 0 && (
@@ -257,10 +325,10 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
-                <AutoFitBounds points={displayedPoints} enabled={showAllDevices} />
+                <AutoFitBounds points={displayedPoints} enabled={showAllRegions} />
 
                 {showHeatView && heatPointsForView.length > 0 && (
-                  <HeatLayer points={heatPointsForView} />
+                  <HeatLayer points={heatPointsForView} metric={heatMetric} />
                 )}
 
                 {dedupedMarkers.map((point, index) => {
@@ -283,7 +351,12 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                       <Popup>
                         <div className="marker-popup">
                           <strong>{point.device_id || "Unknown device"}</strong>
-                          {point.readingCount > 1 && <div style={{ color: "#64748b", fontSize: "0.8em" }}>{point.readingCount} readings at this location</div>}
+                          {point.readingCount > 1 && (
+                            <div style={{ color: "#64748b", fontSize: "0.8em" }}>
+                              {point.readingCount} readings at this location
+                            </div>
+                          )}
+                          <div>Region: {getRegionLabel(point)}</div>
                           <div>RSRP: {point.rsrp ?? "—"} (best)</div>
                           <div>RSRQ: {point.rsrq ?? "—"}</div>
                           <div>Quality: {quality.label}</div>
@@ -307,7 +380,6 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                     eventHandlers={{
                       click: () => setSelectedPoint({
                         ...point,
-                        device_id: selectedDevice || point.device_id,
                         is_prediction: true,
                       }),
                     }}
@@ -316,6 +388,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                       <div className="marker-popup">
                         <strong>ML prediction</strong>
                         <div>Source: {point.prediction_source || point.device_id || "Model"}</div>
+                        <div>Region: {getRegionLabel(point)}</div>
                         {point.predictionCount > 1 && (
                           <div style={{ color: "#64748b", fontSize: "0.8em" }}>
                             {point.predictionCount} predicted samples at this location
@@ -336,6 +409,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
             {!sidePanelPoint && <p className="side-empty">Click a marker to view details</p>}
             {sidePanelPoint && (
               <div className="side-grid">
+                <div><span>Region</span><strong>{getRegionLabel(sidePanelPoint)}</strong></div>
                 <div><span>Latitude</span><strong>{sidePanelPoint.latitude?.toFixed?.(5) ?? sidePanelPoint.latitude}</strong></div>
                 <div><span>Longitude</span><strong>{sidePanelPoint.longitude?.toFixed?.(5) ?? sidePanelPoint.longitude}</strong></div>
                 <div><span>RSRP</span><strong>{sidePanelPoint.rsrp ?? "—"}</strong></div>
@@ -352,6 +426,10 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
           <span><i style={{ background: "#f59e0b" }} /> Fair</span>
           <span><i style={{ background: "#ef4444" }} /> Poor</span>
           <span><i style={{ background: "#94a3b8" }} /> No data</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <i style={{ width: 30, background: "linear-gradient(90deg, #1d4ed8 0%, #06b6d4 50%, #facc15 100%)" }} />
+            Heat palette (shared web + android)
+          </span>
         </section>
       </main>
     </div>

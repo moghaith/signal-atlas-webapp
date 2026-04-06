@@ -6,9 +6,9 @@ function Header({
   onNavigate,
   onRefresh,
   loading,
-  devices = [],
-  selectedDevice = "",
-  onDeviceChange,
+  regions = [],
+  selectedRegion = "",
+  onRegionChange,
   apiMode = "device",
   onApiModeChange,
 }) {
@@ -59,17 +59,17 @@ function Header({
           </div>
 
           <div className="header-device-wrap">
-            <span className="header-device-label">{apiMode === "mobile" ? "Operator" : "Device"}</span>
+            <span className="header-device-label">Region</span>
             <select
               className="header-device-select"
-              value={selectedDevice}
-              onChange={(e) => onDeviceChange?.(e.target.value)}
-              disabled={!devices.length}
+              value={selectedRegion}
+              onChange={(e) => onRegionChange?.(e.target.value)}
+              disabled={!regions.length}
             >
-              {!devices.length && <option value="">No devices</option>}
-              {devices.map((device) => (
-                <option key={device.device_id} value={device.device_id}>
-                  {device.label || device.device_id}
+              {!regions.length && <option value="">No regions</option>}
+              {regions.map((region) => (
+                <option key={region.id || region.label} value={region.id || region.label}>
+                  {region.label}
                 </option>
               ))}
             </select>

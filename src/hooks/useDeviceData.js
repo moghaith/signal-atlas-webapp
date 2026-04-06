@@ -2,10 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getDevicesWithInfo,
   getDeviceReadings,
-  getDeviceLocations,
   getSupabaseDevicesWithInfo,
   getSupabaseDeviceReadings,
-  getSupabaseDeviceLocations,
   getMobileMap,
   getMobileOperators,
   getMobileOverview,
@@ -33,9 +31,35 @@ function estimateLevelFromRsrp(rsrp) {
   return 1;
 }
 
+function getRegionLabel(row) {
+  const city = String(row?.city || "").trim();
+  const country = String(row?.country || "").trim();
+  if (city && country) return `${city}, ${country}`;
+  if (city) return city;
+  if (country) return country;
+  return "Unknown region";
+}
+
+function normalizeRow(row) {
+  const rsrp = toNumber(row?.rsrp);
+  return {
+    ...row,
+    device_id: row?.device_id || row?.source || null,
+    latitude: toNumber(row?.latitude),
+    longitude: toNumber(row?.longitude),
+    rsrp,
+    rsrq: toNumber(row?.rsrq),
+    rssi: toNumber(row?.rssi),
+    asu: row?.asu ?? estimateAsuFromRsrp(rsrp),
+    level: row?.level ?? estimateLevelFromRsrp(rsrp),
+    region_label: getRegionLabel(row),
+  };
+}
+
 export default function useDeviceData(apiMode = "device") {
   const [devices, setDevices] = useState([]);
-  const [selectedDevice, setSelectedDevice] = useState("");
+  const [regions, setRegions] = useState([]);
+  const [selectedRegion, setSelectedRegion] = useState("");
   const [latestReading, setLatestReading] = useState(null);
   const [readings, setReadings] = useState([]);
   const [mapPoints, setMapPoints] = useState([]);
@@ -55,7 +79,7 @@ export default function useDeviceData(apiMode = "device") {
     try {
       if (apiMode === "mobile") {
         const operators = await getMobileOperators();
-        const currentOperator = selectedDevice || operators[0] || "";
+        const currentOperator = selectedRegion || operators[0] || "";
         const mobileFilters = {
           period: "week",
           source: "all",
@@ -78,6 +102,7 @@ export default function useDeviceData(apiMode = "device") {
             operator: currentOperator || "All operators",
             network_type: point.network_type || "Mixed",
             timestamp: point.timestamp || null,
+            region_label: currentOperator || "All operators",
           }))
           .filter((point) => point.latitude != null && point.longitude != null);
 
@@ -96,6 +121,7 @@ export default function useDeviceData(apiMode = "device") {
             network_type: "Mixed",
             physical_cell_id: null,
             tracking_area_code: null,
+            region_label: currentOperator || "All operators",
           };
         });
 
@@ -113,10 +139,17 @@ export default function useDeviceData(apiMode = "device") {
           network_type: "Mixed",
           physical_cell_id: null,
           tracking_area_code: null,
+          region_label: currentOperator || "All operators",
         };
 
+        const mobileRegions = (operators || []).map((operator) => ({
+          id: operator,
+          label: operator,
+        }));
+
         setDevices((operators || []).map((operator) => ({ device_id: operator, label: operator })));
-        setSelectedDevice(currentOperator);
+        setRegions(mobileRegions);
+        setSelectedRegion(currentOperator);
         setLatestReading(latest);
         setReadings(normalizedReadings);
         setMapPoints(normalizedMap);
@@ -127,34 +160,58 @@ export default function useDeviceData(apiMode = "device") {
       }
 
       const loadDevices = apiMode === "supabase" ? getSupabaseDevicesWithInfo : getDevicesWithInfo;
-      const loadLocations = apiMode === "supabase" ? getSupabaseDeviceLocations : getDeviceLocations;
       const loadReadings = apiMode === "supabase" ? getSupabaseDeviceReadings : getDeviceReadings;
 
-      const [devicesData, locationsData] = await Promise.all([
-        loadDevices(),
-        loadLocations(),
-      ]);
-
+      const devicesData = await loadDevices();
       setDevices(devicesData || []);
-      setMapPoints(locationsData || []);
 
-      const deviceList = devicesData || [];
-      const denseReadingsLimit = apiMode === "supabase" ? 20000 : 500;
+      const deviceList = (devicesData || []).filter((device) => device?.device_id !== PREDICTION_DEVICE_ID);
+      const denseReadingsLimit = apiMode === "supabase" ? 20000 : 800;
       const perDeviceHistories = await Promise.all(
-        deviceList.map((device) =>
-          loadReadings(device.device_id, denseReadingsLimit).catch(() => [])
-        )
+        deviceList.map((device) => loadReadings(device.device_id, denseReadingsLimit).catch(() => []))
       );
 
-      const allHeatPoints = perDeviceHistories
+      const allRows = perDeviceHistories
         .flat()
-        .filter((row) => row?.latitude != null && row?.longitude != null);
-      setHeatmapPoints(allHeatPoints);
+        .map((row) => normalizeRow(row))
+        .filter((row) => row?.latitude != null && row?.longitude != null && row?.timestamp);
+
+      const regionMap = new Map();
+      for (const row of allRows) {
+        const key = row.region_label;
+        const entry = regionMap.get(key) || { id: key, label: key, reading_count: 0 };
+        entry.reading_count += 1;
+        regionMap.set(key, entry);
+      }
+      const regionOptions = Array.from(regionMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+      setRegions(regionOptions);
+
+      const validRegion = regionOptions.some((r) => r.id === selectedRegion) ? selectedRegion : (regionOptions[0]?.id || "");
+      setSelectedRegion(validRegion);
+
+      const regionRows = validRegion
+        ? allRows.filter((row) => row.region_label === validRegion)
+        : allRows;
+
+      setHeatmapPoints(regionRows);
+
+      const latestByDevice = new Map();
+      for (const row of regionRows) {
+        const did = row.device_id || "unknown-device";
+        const existing = latestByDevice.get(did);
+        if (!existing || new Date(row.timestamp) > new Date(existing.timestamp)) {
+          latestByDevice.set(did, row);
+        }
+      }
+      const regionMapPoints = Array.from(latestByDevice.values());
+      setMapPoints(regionMapPoints);
 
       if (PREDICTION_DEVICE_ID) {
         const predictionHistory = await loadReadings(PREDICTION_DEVICE_ID, denseReadingsLimit).catch(() => []);
         const predictionRows = (predictionHistory || [])
+          .map((row) => normalizeRow(row))
           .filter((row) => row?.latitude != null && row?.longitude != null)
+          .filter((row) => !validRegion || row.region_label === validRegion)
           .map((row) => ({
             ...row,
             is_prediction: true,
@@ -165,24 +222,15 @@ export default function useDeviceData(apiMode = "device") {
         setPredictionPoints([]);
       }
 
-      const preservedDevice = (devicesData || []).some((device) => device.device_id === selectedDevice)
-        ? selectedDevice
-        : "";
-      const currentDevice = preservedDevice || devicesData?.[0]?.device_id || "";
-      if (currentDevice) {
-        setSelectedDevice(currentDevice);
-        const history = await loadReadings(currentDevice, 50);
-        const latest = history[history.length - 1] || null;
-        setLatestReading(latest);
-        setReadings(history);
-      } else {
-        setSelectedDevice("");
-        setLatestReading(null);
-        setReadings([]);
-      }
+      const history = [...regionRows].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      const latest = history[history.length - 1] || null;
+      setLatestReading(latest);
+      setReadings(history.slice(-250));
+      setSelectedPoint(regionMapPoints[0] || latest || null);
     } catch (err) {
       setDevices([]);
-      setSelectedDevice("");
+      setRegions([]);
+      setSelectedRegion("");
       setLatestReading(null);
       setReadings([]);
       setMapPoints([]);
@@ -192,55 +240,26 @@ export default function useDeviceData(apiMode = "device") {
     } finally {
       setLoading(false);
     }
-  }, [apiMode, selectedDevice]);
+  }, [apiMode, selectedRegion]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    if (!selectedDevice || (apiMode !== "device" && apiMode !== "supabase")) return;
-
-    let cancelled = false;
-    async function loadSelectedDevice() {
-      setReadingsError(null);
-      try {
-        const history = await (apiMode === "supabase"
-          ? getSupabaseDeviceReadings(selectedDevice, 50)
-          : getDeviceReadings(selectedDevice, 50));
-        const latest = history[history.length - 1] || null;
-
-        if (cancelled) return;
-        setLatestReading(latest);
-        setReadings(history);
-
-        const mapPoint = mapPoints.find((point) => point.device_id === selectedDevice);
-        if (mapPoint) setSelectedPoint(mapPoint);
-      } catch (err) {
-        if (!cancelled) {
-          setReadingsError(err.message || "Failed to load selected device readings");
-        }
-      }
-    }
-
-    loadSelectedDevice();
-    return () => {
-      cancelled = true;
-    };
-  }, [apiMode, selectedDevice, mapPoints]);
-
-  const selectedDeviceInfo = devices.find((d) => d.device_id === selectedDevice) || null;
+  const selectedRegionInfo = regions.find((region) => region.id === selectedRegion) || null;
 
   const setSelectedFromMap = useCallback((point) => {
     setSelectedPoint(point);
-    if (point?.device_id) setSelectedDevice(point.device_id);
+    const mapRegion = point?.region_label || getRegionLabel(point);
+    if (mapRegion) setSelectedRegion(mapRegion);
   }, []);
 
   return {
     devices,
-    selectedDevice,
-    setSelectedDevice,
-    selectedDeviceInfo,
+    regions,
+    selectedRegion,
+    setSelectedRegion,
+    selectedRegionInfo,
     latestReading,
     readings,
     mapPoints,

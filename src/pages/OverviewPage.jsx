@@ -8,10 +8,10 @@ import "./OverviewPage.css";
 
 function OverviewPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
   const {
-    devices,
-    selectedDevice,
-    setSelectedDevice,
-    selectedDeviceInfo,
+    regions,
+    selectedRegion,
+    setSelectedRegion,
+    selectedRegionInfo,
     latestReading,
     readings,
     loading,
@@ -29,9 +29,9 @@ function OverviewPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
         onNavigate={onNavigate}
         onRefresh={refresh}
         loading={loading}
-        devices={devices}
-        selectedDevice={selectedDevice}
-        onDeviceChange={setSelectedDevice}
+        regions={regions}
+        selectedRegion={selectedRegion}
+        onRegionChange={setSelectedRegion}
         apiMode={apiMode}
         onApiModeChange={onApiModeChange}
       />
@@ -41,8 +41,8 @@ function OverviewPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
           <span className="page-tag">Page 01</span>
           <h2>Home / Overview</h2>
           <p>
-            Landing page showing a high-level summary of the selected device. Stat cards for key metrics,
-            device info panel, and time-series charts.
+            Landing page showing a high-level summary of the selected region. Stat cards for key metrics,
+            area info panel, and time-series charts.
           </p>
         </section>
 
@@ -53,24 +53,24 @@ function OverviewPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
           </div>
         )}
 
-        {loading && !selectedDeviceInfo && (
+        {loading && !selectedRegionInfo && (
           <div className="loading-state">
             <div className="loading-spinner" />
-            <span>Loading device data...</span>
+            <span>Loading region data...</span>
           </div>
         )}
 
-        {!loading && devices.length === 0 && !latestReading && readings.length === 0 && !error && (
+        {!loading && regions.length === 0 && !latestReading && readings.length === 0 && !error && (
           <div className="empty-state">
             <span className="empty-icon">📡</span>
-            <h3>No Devices Found</h3>
-            <p>No device data is available from the backend yet.</p>
+            <h3>No Regions Found</h3>
+            <p>No regional data is available from the backend yet.</p>
           </div>
         )}
 
         {readingsError && (
           <div className="error-banner readings-error">
-            <span>⚠️ Could not fetch device readings: {readingsError}</span>
+            <span>⚠️ Could not fetch region readings: {readingsError}</span>
             <button onClick={refresh}>Retry</button>
           </div>
         )}
