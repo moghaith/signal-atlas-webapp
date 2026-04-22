@@ -14,7 +14,7 @@ function Header({
 }) {
   const tabs = [
     { id: "overview", tag: "Page 01", label: "Home / Overview" },
-    { id: "detail", tag: "Page 02", label: "Device Detail" },
+    { id: "detail", tag: "Page 02", label: "Comparison" },
     { id: "map", tag: "Page 03", label: "Map View" },
     { id: "reports", tag: "Page 04", label: "Historical Reports" },
   ];
@@ -51,10 +51,9 @@ function Header({
               className="header-device-select"
               value={apiMode}
               onChange={(e) => onApiModeChange?.(e.target.value)}
+              disabled
             >
               <option value="supabase">Supabase</option>
-              <option value="device">Device API</option>
-              <option value="mobile">Mobile API</option>
             </select>
           </div>
 

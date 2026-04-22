@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Header from "../components/Header/Header";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.heat";
 import useDeviceData from "../hooks/useDeviceData";
 import "./MapPage.css";
+
+const ALL_REGIONS_ID = "__all__";
 
 const SHARED_HEAT_GRADIENT = {
   0.0: "#1d4ed8",
@@ -35,11 +37,33 @@ function metricToIntensity(metric, value) {
   return Math.max(0.1, Math.min(1, (v + 125) / 45));
 }
 
+function zoomToPrecision(zoom) {
+  if (zoom <= 8) return 2;
+  if (zoom <= 11) return 3;
+  if (zoom <= 14) return 4;
+  if (zoom <= 16) return 5;
+  return 6;
+}
+
 function HeatLayer({ points, metric }) {
   const map = useMap();
+  const [zoom, setZoom] = useState(() => map?.getZoom?.() ?? 11);
+
+  useEffect(() => {
+    if (!map) return undefined;
+
+    const onZoomEnd = () => setZoom(map.getZoom());
+    map.on("zoomend", onZoomEnd);
+
+    return () => {
+      map.off("zoomend", onZoomEnd);
+    };
+  }, [map]);
 
   useEffect(() => {
     if (!map || !points.length) return undefined;
+
+    const precision = zoomToPrecision(zoom);
 
     const byCoordinate = new Map();
     for (const point of points) {
@@ -48,15 +72,21 @@ function HeatLayer({ points, metric }) {
       const lng = Number(point.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
-      const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      const bucketLat = Number(lat.toFixed(precision));
+      const bucketLng = Number(lng.toFixed(precision));
+      const key = `${bucketLat},${bucketLng}`;
       const existing = byCoordinate.get(key) || {
-        lat,
-        lng,
+        latSum: 0,
+        lngSum: 0,
+        pointCount: 0,
         sum: 0,
         count: 0,
         density: 0,
       };
 
+      existing.latSum += lat;
+      existing.lngSum += lng;
+      existing.pointCount += 1;
       existing.density += 1;
 
       if (metric !== "density") {
@@ -74,13 +104,16 @@ function HeatLayer({ points, metric }) {
     const maxDensity = grouped.reduce((max, row) => Math.max(max, row.density), 1);
 
     const heatData = grouped.map((entry) => {
+      const avgLat = entry.pointCount > 0 ? entry.latSum / entry.pointCount : null;
+      const avgLng = entry.pointCount > 0 ? entry.lngSum / entry.pointCount : null;
+
       if (metric === "density") {
         const densityIntensity = Math.max(0.1, Math.min(1, entry.density / maxDensity));
-        return [entry.lat, entry.lng, densityIntensity];
+        return [avgLat, avgLng, densityIntensity];
       }
 
       const avg = entry.count > 0 ? entry.sum / entry.count : null;
-      return [entry.lat, entry.lng, metricToIntensity(metric, avg)];
+      return [avgLat, avgLng, metricToIntensity(metric, avg)];
     });
 
     const layer = L.heatLayer(heatData, {
@@ -94,7 +127,7 @@ function HeatLayer({ points, metric }) {
     return () => {
       map.removeLayer(layer);
     };
-  }, [map, metric, points]);
+  }, [map, metric, points, zoom]);
 
   return null;
 }
@@ -130,8 +163,20 @@ function getQuality(point) {
 function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
   const {
     regions,
+    operators,
+    networkTypes,
     selectedRegion,
     setSelectedRegion,
+    selectedOperator,
+    setSelectedOperator,
+    selectedNetworkType,
+    setSelectedNetworkType,
+    selectedPeriod,
+    setSelectedPeriod,
+    dataSourceMode,
+    setDataSourceMode,
+    predictionConfidenceMin,
+    setPredictionConfidenceMin,
     mapPoints,
     heatmapPoints,
     predictionPoints,
@@ -145,24 +190,27 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
   const [showAllRegions, setShowAllRegions] = useState(false);
   const [showAllReadings, setShowAllReadings] = useState(true);
   const [showHeatView, setShowHeatView] = useState(false);
-  const [showPredictions, setShowPredictions] = useState(false);
   const [heatMetric, setHeatMetric] = useState("rsrp");
 
-  const pointsToRender = showAllRegions
+  const allRegionsEnabled = showAllRegions || selectedRegion === ALL_REGIONS_ID;
+
+  const pointsToRender = allRegionsEnabled
     ? mapPoints
     : mapPoints.filter((point) => getRegionLabel(point) === selectedRegion);
 
-  const allReadingPoints = showAllRegions
+  const allReadingPoints = allRegionsEnabled
     ? heatmapPoints
     : heatmapPoints.filter((point) => getRegionLabel(point) === selectedRegion);
 
   const displayedPoints = showAllReadings ? allReadingPoints : pointsToRender;
+  const crowdsourcedPoints = displayedPoints.filter((point) => !point.is_prediction);
 
   const predictionPointsForView = useMemo(() => {
-    if (showAllRegions) return predictionPoints;
+    if (dataSourceMode === "crowdsourced") return [];
+    if (allRegionsEnabled) return predictionPoints;
     if (!selectedRegion) return predictionPoints;
     return predictionPoints.filter((point) => getRegionLabel(point) === selectedRegion);
-  }, [predictionPoints, selectedRegion, showAllRegions]);
+  }, [allRegionsEnabled, dataSourceMode, predictionPoints, selectedRegion]);
 
   const dedupedPredictionMarkers = useMemo(() => {
     const coordMap = new Map();
@@ -180,13 +228,12 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
   }, [predictionPointsForView]);
 
   const heatPointsForView = useMemo(() => {
-    if (!showPredictions) return displayedPoints;
-    return [...displayedPoints, ...predictionPointsForView];
-  }, [displayedPoints, predictionPointsForView, showPredictions]);
+    return displayedPoints;
+  }, [displayedPoints]);
 
   const dedupedMarkers = useMemo(() => {
     const coordMap = new Map();
-    for (const point of displayedPoints) {
+    for (const point of crowdsourcedPoints) {
       if (point.latitude == null || point.longitude == null) continue;
       const key = `${point.latitude.toFixed(6)},${point.longitude.toFixed(6)}`;
       const existing = coordMap.get(key);
@@ -200,7 +247,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
       }
     }
     return Array.from(coordMap.values());
-  }, [displayedPoints]);
+  }, [crowdsourcedPoints]);
 
   const uniqueCoordinatesCount = new Set(
     displayedPoints
@@ -215,7 +262,18 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
     ? [sidePanelPoint.latitude, sidePanelPoint.longitude]
     : [30.0444, 31.2357];
 
-  const mapKey = `${mapCenter[0]}-${mapCenter[1]}-${showAllRegions}-${selectedRegion}`;
+  const mapKey = `${showAllRegions}-${selectedRegion}`;
+
+  const handlePointFocus = useCallback((point, leafletEvent) => {
+    setSelectedPoint(point);
+
+    const map = leafletEvent?.target?._map;
+    if (!map || point?.latitude == null || point?.longitude == null) return;
+
+    const currentZoom = map.getZoom?.() ?? 11;
+    const nextZoom = Math.max(currentZoom, 15);
+    map.flyTo([point.latitude, point.longitude], nextZoom, { animate: true, duration: 0.6 });
+  }, [setSelectedPoint]);
 
   return (
     <div className="page">
@@ -260,6 +318,59 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
             <span>Show all readings points</span>
           </label>
 
+          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Operator</span>
+            <select
+              className="header-device-select"
+              value={selectedOperator}
+              onChange={(e) => setSelectedOperator(e.target.value)}
+            >
+              {operators.map((operator) => (
+                <option key={operator.id} value={operator.id}>{operator.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Period</span>
+            <select
+              className="header-device-select"
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+            >
+              <option value="24h">Last 24h</option>
+              <option value="week">Last week</option>
+              <option value="month">Last month</option>
+              <option value="all">All history</option>
+            </select>
+          </div>
+
+          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Network type</span>
+            <select
+              className="header-device-select"
+              value={selectedNetworkType}
+              onChange={(e) => setSelectedNetworkType(e.target.value)}
+            >
+              {networkTypes.map((networkType) => (
+                <option key={networkType.id} value={networkType.id}>{networkType.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Data source</span>
+            <select
+              className="header-device-select"
+              value={dataSourceMode}
+              onChange={(e) => setDataSourceMode(e.target.value)}
+            >
+              <option value="crowdsourced">Crowdsourced only</option>
+              <option value="predicted">ML model (predicted)</option>
+              <option value="both">Both</option>
+            </select>
+          </div>
+
           <label className="map-toggle">
             <input
               type="checkbox"
@@ -282,14 +393,21 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
             </select>
           </div>
 
-          <label className="map-toggle">
-            <input
-              type="checkbox"
-              checked={showPredictions}
-              onChange={(e) => setShowPredictions(e.target.checked)}
-            />
-            <span>Show ML predictions</span>
-          </label>
+          {(dataSourceMode === "predicted" || dataSourceMode === "both") && (
+            <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span>Min prediction confidence</span>
+              <select
+                className="header-device-select"
+                value={String(predictionConfidenceMin)}
+                onChange={(e) => setPredictionConfidenceMin(Number(e.target.value))}
+              >
+                <option value="0">Any</option>
+                <option value="0.5">50%+</option>
+                <option value="0.7">70%+</option>
+                <option value="0.85">85%+</option>
+              </select>
+            </div>
+          )}
 
           <button type="button" className="map-refresh" onClick={refresh}>
             Refresh map
@@ -300,7 +418,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
           <span><strong>Total readings:</strong> {displayedPoints.length}</span>
           <span><strong>Unique coordinates:</strong> {uniqueCoordinatesCount}</span>
           <span><strong>Shown markers:</strong> {dedupedMarkers.length}</span>
-          <span><strong>Predictions:</strong> {showPredictions ? dedupedPredictionMarkers.length : 0}</span>
+          <span><strong>Predictions:</strong> {dataSourceMode === "crowdsourced" ? 0 : dedupedPredictionMarkers.length}</span>
           <span><strong>Heat metric:</strong> {heatMetric.toUpperCase()}</span>
         </section>
 
@@ -345,7 +463,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                         fillOpacity: showAllReadings ? 0.85 : 0.95,
                       }}
                       eventHandlers={{
-                        click: () => setSelectedPoint(point),
+                        click: (event) => handlePointFocus(point, event),
                       }}
                     >
                       <Popup>
@@ -366,7 +484,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                   );
                 })}
 
-                {showPredictions && dedupedPredictionMarkers.map((point, index) => (
+                {(dataSourceMode === "predicted" || dataSourceMode === "both") && dedupedPredictionMarkers.map((point, index) => (
                   <CircleMarker
                     key={`pred-${point.latitude}-${point.longitude}-${index}`}
                     center={[point.latitude, point.longitude]}
@@ -378,10 +496,10 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                       fillOpacity: 0.35,
                     }}
                     eventHandlers={{
-                      click: () => setSelectedPoint({
+                      click: (event) => handlePointFocus({
                         ...point,
                         is_prediction: true,
-                      }),
+                      }, event),
                     }}
                   >
                     <Popup>
@@ -394,6 +512,9 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                             {point.predictionCount} predicted samples at this location
                           </div>
                         )}
+                        <div>
+                          Confidence: {point.prediction_confidence != null ? `${Math.round(point.prediction_confidence * 100)}%` : "N/A"}
+                        </div>
                         <div>Predicted RSRP: {point.rsrp ?? "—"}</div>
                         <div>Predicted RSRQ: {point.rsrq ?? "—"}</div>
                       </div>
@@ -414,6 +535,12 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                 <div><span>Longitude</span><strong>{sidePanelPoint.longitude?.toFixed?.(5) ?? sidePanelPoint.longitude}</strong></div>
                 <div><span>RSRP</span><strong>{sidePanelPoint.rsrp ?? "—"}</strong></div>
                 <div><span>RSRQ</span><strong>{sidePanelPoint.rsrq ?? "—"}</strong></div>
+                {sidePanelPoint.is_prediction && (
+                  <div>
+                    <span>Confidence</span>
+                    <strong>{sidePanelPoint.prediction_confidence != null ? `${Math.round(sidePanelPoint.prediction_confidence * 100)}%` : "N/A"}</strong>
+                  </div>
+                )}
                 <div><span>Quality</span><strong>{getQuality(sidePanelPoint).label}</strong></div>
               </div>
             )}

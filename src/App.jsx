@@ -1,42 +1,27 @@
-import { useState } from "react";
-import OverviewPage from "./pages/OverviewPage";
-import MapPage from "./pages/MapPage";
-import Header from "./components/Header/Header";
+import { Suspense, lazy, useState } from "react";
 import Mockup from "./Mockup";
 
-function PlaceholderPage({ pageKey, onNavigate, apiMode, onApiModeChange }) {
-  const title = pageKey === "detail" ? "Device Detail" : "Historical Reports";
-  const subtitle = pageKey === "detail"
-    ? "This page is next in progress. Layout and navigation are ready."
-    : "This page is next in progress. Export and reporting widgets are coming next.";
-
-  return (
-    <div className="page">
-      <Header activePage={pageKey} onNavigate={onNavigate} onRefresh={() => {}} loading={false} apiMode={apiMode} onApiModeChange={onApiModeChange} />
-      <main className="page-content">
-        <section className="empty-state">
-          <span className="empty-icon">🧩</span>
-          <h3>{title}</h3>
-          <p>{subtitle}</p>
-        </section>
-      </main>
-    </div>
-  );
-}
+const OverviewPage = lazy(() => import("./pages/OverviewPage"));
+const MapPage = lazy(() => import("./pages/MapPage"));
+const ComparisonPage = lazy(() => import("./pages/ComparisonPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
 
 function App() {
   const [showMockup, setShowMockup] = useState(false);
   const [activePage, setActivePage] = useState("overview");
-  const [apiMode, setApiMode] = useState(import.meta.env.VITE_API_MODE || "supabase");
+  const apiMode = "supabase";
 
   const renderLivePage = () => {
+    if (activePage === "detail") {
+      return <ComparisonPage activePage={activePage} onNavigate={setActivePage} apiMode={apiMode} onApiModeChange={() => {}} />;
+    }
     if (activePage === "map") {
-      return <MapPage activePage={activePage} onNavigate={setActivePage} apiMode={apiMode} onApiModeChange={setApiMode} />;
+      return <MapPage activePage={activePage} onNavigate={setActivePage} apiMode={apiMode} onApiModeChange={() => {}} />;
     }
-    if (activePage === "detail" || activePage === "reports") {
-      return <PlaceholderPage pageKey={activePage} onNavigate={setActivePage} apiMode={apiMode} onApiModeChange={setApiMode} />;
+    if (activePage === "reports") {
+      return <ReportsPage activePage={activePage} onNavigate={setActivePage} apiMode={apiMode} onApiModeChange={() => {}} />;
     }
-    return <OverviewPage activePage={activePage} onNavigate={setActivePage} apiMode={apiMode} onApiModeChange={setApiMode} />;
+    return <OverviewPage activePage={activePage} onNavigate={setActivePage} apiMode={apiMode} onApiModeChange={() => {}} />;
   };
 
   return (
@@ -61,7 +46,19 @@ function App() {
       >
         {showMockup ? "← Live App" : "View Mockup →"}
       </button>
-      {showMockup ? <Mockup /> : renderLivePage()}
+      {showMockup ? (
+        <Mockup />
+      ) : (
+        <Suspense
+          fallback={(
+            <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#475569", fontSize: 14 }}>
+              Loading dashboard...
+            </div>
+          )}
+        >
+          {renderLivePage()}
+        </Suspense>
+      )}
     </>
   );
 }
