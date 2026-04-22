@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 /Backend/signal-atlas-backend
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
