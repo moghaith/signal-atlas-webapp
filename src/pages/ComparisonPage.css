@@ -1,0 +1,162 @@
+.comparison-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.comparison-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comparison-filter span {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.comparison-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.comparison-panel h3 {
+  font-size: 14px;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.comparison-panel p {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.comparison-panel.crowdsourced {
+  border-left: 4px solid #2563eb;
+}
+
+.comparison-panel.predicted {
+  border-left: 4px solid #06b6d4;
+}
+
+.comparison-panel.delta {
+  border-left: 4px solid #7c3aed;
+}
+
+.comparison-table-wrap {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: auto;
+}
+
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.comparison-table th,
+.comparison-table td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.comparison-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.comparison-ai-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comparison-ai-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.comparison-ai-head h3 {
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.comparison-ai-head button {
+  border: 1px solid #cbd5e1;
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.comparison-ai-head button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.comparison-ai-placeholder {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.comparison-ai-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  color: #1e293b;
+  line-height: 1.5;
+}
+
+.comparison-ai-error {
+  font-size: 12px;
+  color: #b45309;
+}
+
+.comparison-operator-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comparison-section-head h3 {
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.comparison-section-head p {
+  font-size: 13px;
+  color: #64748b;
+}
+
+@media (max-width: 900px) {
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+}
