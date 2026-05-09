@@ -314,6 +314,34 @@ export function getReadingStats(readings) {
   }
 }
 
+async function supabaseRpcCall(functionName) {
+  if (!SUPABASE_ANON_KEY) {
+    throw new Error('Missing VITE_SUPABASE_ANON_KEY for Supabase mode')
+  }
+
+  const url = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: supabaseHeaders,
+  })
+  if (!response.ok) {
+    throw new Error(`Supabase RPC ${response.status}: ${response.statusText} (${functionName})`)
+  }
+  return response.json()
+}
+
+export async function getSupabaseDeviceSources() {
+  return supabaseRpcCall('get_device_sources')
+}
+
+export async function getSupabaseReadingAggregates() {
+  return supabaseRpcCall('get_reading_aggregates')
+}
+
+export async function getSupabaseReadingDistributions() {
+  return supabaseRpcCall('get_reading_distributions')
+}
+
 export async function getAiDashboardSummary(payload) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ''
   if (!apiKey) {
