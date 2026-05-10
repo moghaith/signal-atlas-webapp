@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getDevicesWithInfo,
   getDeviceReadings,
-  getSupabaseDevicesWithInfo,
+  getSupabaseDeviceSources,
   getSupabaseDeviceReadings,
   getMobileMap,
   getMobileOperators,
@@ -522,7 +522,7 @@ export default function useDeviceData(apiMode = "device") {
         return;
       }
 
-      const loadDevices = effectiveApiMode === "supabase" ? getSupabaseDevicesWithInfo : getDevicesWithInfo;
+      const loadDevices = effectiveApiMode === "supabase" ? getSupabaseDeviceSources : getDevicesWithInfo;
       const loadReadings = effectiveApiMode === "supabase" ? getSupabaseDeviceReadings : getDeviceReadings;
 
       const devicesData = await loadDevices();

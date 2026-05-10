@@ -4,6 +4,10 @@ import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaf
 import L from "leaflet";
 import "leaflet.heat";
 import useDeviceData from "../hooks/useDeviceData";
+import {
+  getSupabaseReadingAggregates,
+  getSupabaseReadingDistributions,
+} from "../data/dataService";
 import "./MapPage.css";
 
 const ALL_REGIONS_ID = "__all__";
@@ -132,6 +136,51 @@ function HeatLayer({ points, metric }) {
   return null;
 }
 
+function DirectMarkers({ points, onPointClick }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !points.length) return undefined;
+
+    const layer = L.layerGroup();
+    for (const point of points) {
+      if (point.latitude == null || point.longitude == null) continue;
+      const quality = getQuality(point);
+
+      const marker = L.circleMarker([point.latitude, point.longitude], {
+        radius: 5,
+        color: "#ffffff",
+        weight: 1,
+        fillColor: quality.color,
+        fillOpacity: 0.85,
+      });
+
+      marker.bindPopup(`
+        <div style="font-size:12px;line-height:1.5">
+          <strong>${point.device_id || "Unknown device"}</strong>
+          <div>Region: ${getRegionLabel(point)}</div>
+          <div>RSRP: ${point.rsrp ?? "—"}</div>
+          <div>RSRQ: ${point.rsrq ?? "—"}</div>
+          <div>Quality: ${quality.label}</div>
+        </div>
+      `);
+
+      marker.on("click", (e) => {
+        onPointClick?.(point, e);
+      });
+
+      layer.addLayer(marker);
+    }
+
+    map.addLayer(layer);
+    return () => {
+      map.removeLayer(layer);
+    };
+  }, [map, points, onPointClick]);
+
+  return null;
+}
+
 function AutoFitBounds({ points, enabled }) {
   const map = useMap();
 
@@ -191,6 +240,37 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
   const [showAllReadings, setShowAllReadings] = useState(true);
   const [showHeatView, setShowHeatView] = useState(false);
   const [heatMetric, setHeatMetric] = useState("rsrp");
+  const [expanded, setExpanded] = useState(false);
+
+  const [globalStats, setGlobalStats] = useState(null);
+  const [globalDistributions, setGlobalDistributions] = useState(null);
+
+  useEffect(() => {
+    if (apiMode !== "supabase") return;
+    Promise.all([
+      getSupabaseReadingAggregates().catch(() => null),
+      getSupabaseReadingDistributions().catch(() => null),
+    ]).then(([aggs, dists]) => {
+      setGlobalStats(aggs?.[0] ?? null);
+      if (dists?.[0]) {
+        const dist = dists[0].get_reading_distributions;
+        if (dist) {
+          const netTypes = (dist.network_types || []).reduce((acc, item) => {
+            const key = item.type || "Unknown";
+            const existing = acc.find((e) => e.type === key);
+            if (existing) existing.count += item.count;
+            else acc.push({ type: key, count: item.count });
+            return acc;
+          }, []);
+          setGlobalDistributions({
+            network_types: netTypes,
+            operators: dist.operators || [],
+            top_cities: dist.top_cities || [],
+          });
+        }
+      }
+    });
+  }, [apiMode]);
 
   const allRegionsEnabled = showAllRegions || selectedRegion === ALL_REGIONS_ID;
 
@@ -276,7 +356,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
   }, [setSelectedPoint]);
 
   return (
-    <div className="page">
+    <div className={`page${expanded ? ' map-expanded' : ''}`}>
       <Header
         activePage={activePage}
         onNavigate={onNavigate}
@@ -417,7 +497,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
         <section className="map-stats">
           <span><strong>Total readings:</strong> {displayedPoints.length}</span>
           <span><strong>Unique coordinates:</strong> {uniqueCoordinatesCount}</span>
-          <span><strong>Shown markers:</strong> {dedupedMarkers.length}</span>
+          <span><strong>Markers rendered:</strong> {showAllReadings ? crowdsourcedPoints.length : dedupedMarkers.length}</span>
           <span><strong>Predictions:</strong> {dataSourceMode === "crowdsourced" ? 0 : dedupedPredictionMarkers.length}</span>
           <span><strong>Heat metric:</strong> {heatMetric.toUpperCase()}</span>
         </section>
@@ -429,15 +509,24 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
           </div>
         )}
 
-        <section className="map-layout">
+        <section className={`map-layout${expanded ? ' map-layout-expanded' : ''}`}>
           <div className="map-canvas">
+            <button
+              type="button"
+              className="map-expand-btn"
+              onClick={() => setExpanded((v) => !v)}
+              title={expanded ? "Collapse map" : "Expand map"}
+            >
+              {expanded ? "✕" : "⛶"}
+            </button>
+
             {loading && <p className="map-status">Loading map points...</p>}
             {!loading && displayedPoints.length === 0 && (
               <p className="map-status">No map points available for the selected region view.</p>
             )}
 
             {!loading && displayedPoints.length > 0 && (
-              <MapContainer key={mapKey} center={mapCenter} zoom={11} className="leaflet-map">
+              <MapContainer key={mapKey} center={mapCenter} zoom={11} className="leaflet-map" preferCanvas={true}>
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -449,40 +538,17 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                   <HeatLayer points={heatPointsForView} metric={heatMetric} />
                 )}
 
-                {dedupedMarkers.map((point, index) => {
-                  const quality = getQuality(point);
-                  return (
-                    <CircleMarker
-                      key={`${point.device_id || "point"}-${point.latitude}-${point.longitude}-${index}`}
-                      center={[point.latitude, point.longitude]}
-                      radius={showAllReadings ? 5 : 7}
-                      pathOptions={{
-                        color: "#ffffff",
-                        weight: showAllReadings ? 1 : 2,
-                        fillColor: quality.color,
-                        fillOpacity: showAllReadings ? 0.85 : 0.95,
-                      }}
-                      eventHandlers={{
-                        click: (event) => handlePointFocus(point, event),
-                      }}
-                    >
-                      <Popup>
-                        <div className="marker-popup">
-                          <strong>{point.device_id || "Unknown device"}</strong>
-                          {point.readingCount > 1 && (
-                            <div style={{ color: "#64748b", fontSize: "0.8em" }}>
-                              {point.readingCount} readings at this location
-                            </div>
-                          )}
-                          <div>Region: {getRegionLabel(point)}</div>
-                          <div>RSRP: {point.rsrp ?? "—"} (best)</div>
-                          <div>RSRQ: {point.rsrq ?? "—"}</div>
-                          <div>Quality: {quality.label}</div>
-                        </div>
-                      </Popup>
-                    </CircleMarker>
-                  );
-                })}
+                {showAllReadings ? (
+                  <DirectMarkers
+                    points={crowdsourcedPoints}
+                    onPointClick={handlePointFocus}
+                  />
+                ) : (
+                  <DirectMarkers
+                    points={dedupedMarkers}
+                    onPointClick={handlePointFocus}
+                  />
+                )}
 
                 {(dataSourceMode === "predicted" || dataSourceMode === "both") && dedupedPredictionMarkers.map((point, index) => (
                   <CircleMarker
@@ -525,26 +591,28 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
             )}
           </div>
 
-          <aside className="map-side-panel">
-            <h3>Point Details</h3>
-            {!sidePanelPoint && <p className="side-empty">Click a marker to view details</p>}
-            {sidePanelPoint && (
-              <div className="side-grid">
-                <div><span>Region</span><strong>{getRegionLabel(sidePanelPoint)}</strong></div>
-                <div><span>Latitude</span><strong>{sidePanelPoint.latitude?.toFixed?.(5) ?? sidePanelPoint.latitude}</strong></div>
-                <div><span>Longitude</span><strong>{sidePanelPoint.longitude?.toFixed?.(5) ?? sidePanelPoint.longitude}</strong></div>
-                <div><span>RSRP</span><strong>{sidePanelPoint.rsrp ?? "—"}</strong></div>
-                <div><span>RSRQ</span><strong>{sidePanelPoint.rsrq ?? "—"}</strong></div>
-                {sidePanelPoint.is_prediction && (
-                  <div>
-                    <span>Confidence</span>
-                    <strong>{sidePanelPoint.prediction_confidence != null ? `${Math.round(sidePanelPoint.prediction_confidence * 100)}%` : "N/A"}</strong>
-                  </div>
-                )}
-                <div><span>Quality</span><strong>{getQuality(sidePanelPoint).label}</strong></div>
-              </div>
-            )}
-          </aside>
+          {!expanded && (
+            <aside className="map-side-panel">
+              <h3>Point Details</h3>
+              {!sidePanelPoint && <p className="side-empty">Click a marker to view details</p>}
+              {sidePanelPoint && (
+                <div className="side-grid">
+                  <div><span>Region</span><strong>{getRegionLabel(sidePanelPoint)}</strong></div>
+                  <div><span>Latitude</span><strong>{sidePanelPoint.latitude?.toFixed?.(5) ?? sidePanelPoint.latitude}</strong></div>
+                  <div><span>Longitude</span><strong>{sidePanelPoint.longitude?.toFixed?.(5) ?? sidePanelPoint.longitude}</strong></div>
+                  <div><span>RSRP</span><strong>{sidePanelPoint.rsrp ?? "—"}</strong></div>
+                  <div><span>RSRQ</span><strong>{sidePanelPoint.rsrq ?? "—"}</strong></div>
+                  {sidePanelPoint.is_prediction && (
+                    <div>
+                      <span>Confidence</span>
+                      <strong>{sidePanelPoint.prediction_confidence != null ? `${Math.round(sidePanelPoint.prediction_confidence * 100)}%` : "N/A"}</strong>
+                    </div>
+                  )}
+                  <div><span>Quality</span><strong>{getQuality(sidePanelPoint).label}</strong></div>
+                </div>
+              )}
+            </aside>
+          )}
         </section>
 
         <section className="map-legend">
@@ -558,6 +626,129 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
             Heat palette (shared web + android)
           </span>
         </section>
+
+        {globalStats && (
+          <section className="map-db-stats">
+            <h3>Database Statistics</h3>
+            <div className="db-stats-grid">
+              <div className="db-stat-card">
+                <span className="stat-label">Total Readings</span>
+                <span className="stat-value">{globalStats.total_readings?.toLocaleString()}</span>
+              </div>
+              <div className="db-stat-card">
+                <span className="stat-label">Unique Sources</span>
+                <span className="stat-value">{globalStats.unique_sources}</span>
+              </div>
+              <div className="db-stat-card">
+                <span className="stat-label">Unique Cells</span>
+                <span className="stat-value">{globalStats.unique_cells}</span>
+              </div>
+              <div className="db-stat-card">
+                <span className="stat-label">Cities</span>
+                <span className="stat-value">{globalStats.unique_cities}</span>
+              </div>
+              <div className="db-stat-card">
+                <span className="stat-label">Avg RSRP</span>
+                <span className="stat-value">{globalStats.avg_rsrp} <span style={{fontSize:12,fontWeight:400,color:"#64748b"}}>dBm</span></span>
+              </div>
+              <div className="db-stat-card">
+                <span className="stat-label">Avg RSRQ</span>
+                <span className="stat-value">{globalStats.avg_rsrq} <span style={{fontSize:12,fontWeight:400,color:"#64748b"}}>dB</span></span>
+              </div>
+              <div className="db-stat-card">
+                <span className="stat-label">Avg RSSI</span>
+                <span className="stat-value">{globalStats.avg_rssi} <span style={{fontSize:12,fontWeight:400,color:"#64748b"}}>dBm</span></span>
+              </div>
+              <div className="db-stat-card">
+                <span className="stat-label">Date Range</span>
+                <span className="stat-value" style={{fontSize:13}}>{globalStats.earliest_reading?.slice(0,10)}</span>
+                <span className="stat-sub">to {globalStats.latest_reading?.slice(0,10)}</span>
+              </div>
+            </div>
+
+            <div className="db-stat-card" style={{padding:"14px 16px"}}>
+              <span className="stat-label">Signal Quality Distribution</span>
+              {(() => {
+                const total = globalStats.total_readings || 1;
+                const excellent = globalStats.excellent_count || 0;
+                const good = globalStats.good_count || 0;
+                const fair = globalStats.fair_count || 0;
+                const poor = globalStats.poor_count || 0;
+                const noSignal = globalStats.no_signal_count || 0;
+                return (
+                  <div>
+                    <div className="db-quality-bar">
+                      <div style={{width:`${(excellent/total)*100}%`,background:"#22c55e",minWidth:excellent?24:0}}>{excellent ? `${Math.round(excellent/total*100)}%` : ""}</div>
+                      <div style={{width:`${(good/total)*100}%`,background:"#6b9ae8",minWidth:good?24:0}}>{good ? `${Math.round(good/total*100)}%` : ""}</div>
+                      <div style={{width:`${(fair/total)*100}%`,background:"#f59e0b",minWidth:fair?24:0}}>{fair ? `${Math.round(fair/total*100)}%` : ""}</div>
+                      <div style={{width:`${(poor/total)*100}%`,background:"#ef4444",minWidth:poor?24:0}}>{poor ? `${Math.round(poor/total*100)}%` : ""}</div>
+                      <div style={{width:`${(noSignal/total)*100}%`,background:"#94a3b8",minWidth:noSignal?24:0}}>{noSignal ? `${Math.round(noSignal/total*100)}%` : ""}</div>
+                    </div>
+                    <div style={{display:"flex",gap:12,fontSize:11,color:"#64748b",marginTop:6,flexWrap:"wrap"}}>
+                      <span>Excellent: {excellent.toLocaleString()}</span>
+                      <span>Good: {good.toLocaleString()}</span>
+                      <span>Fair: {fair.toLocaleString()}</span>
+                      <span>Poor: {poor.toLocaleString()}</span>
+                      <span>No data: {noSignal.toLocaleString()}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {globalDistributions && (
+              <div className="db-dist-grid">
+                <div className="db-dist-table">
+                  <h4>Network Type Distribution</h4>
+                  <table>
+                    <tbody>
+                      {globalDistributions.network_types.map((item) => {
+                        const maxCount = globalDistributions.network_types[0]?.count || 1;
+                        return (
+                          <tr key={item.type}>
+                            <td>{item.type}</td>
+                            <td>
+                              <div className="dist-bar-wrap">
+                                <div className="dist-bar">
+                                  <div className="dist-bar-fill" style={{width:`${(item.count/maxCount)*100}%`}} />
+                                </div>
+                                <span>{item.count.toLocaleString()}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="db-dist-table">
+                  <h4>Top Operators</h4>
+                  <table>
+                    <tbody>
+                      {globalDistributions.operators.map((item) => {
+                        const maxCount = globalDistributions.operators[0]?.count || 1;
+                        return (
+                          <tr key={item.name}>
+                            <td>{item.name}</td>
+                            <td>
+                              <div className="dist-bar-wrap">
+                                <div className="dist-bar">
+                                  <div className="dist-bar-fill" style={{width:`${(item.count/maxCount)*100}%`}} />
+                                </div>
+                                <span>{item.count.toLocaleString()}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );
