@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Header from "../components/Header/Header";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.heat";
@@ -209,7 +208,7 @@ function getQuality(point) {
   return { label: "Poor", color: "#ef4444" };
 }
 
-function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
+function MapPage({ deviceData, apiMode }) {
   const {
     regions,
     operators,
@@ -234,7 +233,7 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
     loading,
     error,
     refresh,
-  } = useDeviceData(apiMode);
+  } = deviceData;
 
   const [showAllRegions, setShowAllRegions] = useState(false);
   const [showAllReadings, setShowAllReadings] = useState(true);
@@ -357,17 +356,6 @@ function MapPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
 
   return (
     <div className={`page${expanded ? ' map-expanded' : ''}`}>
-      <Header
-        activePage={activePage}
-        onNavigate={onNavigate}
-        onRefresh={refresh}
-        loading={loading}
-        regions={regions}
-        selectedRegion={selectedRegion}
-        onRegionChange={setSelectedRegion}
-        apiMode={apiMode}
-        onApiModeChange={onApiModeChange}
-      />
 
       <main className="page-content">
         <section className="page-intro">

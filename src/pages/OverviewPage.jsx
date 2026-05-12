@@ -1,4 +1,3 @@
-import Header from "../components/Header/Header";
 import StatCard from "../components/StatCard/StatCard";
 import DeviceInfo from "../components/DeviceInfo/DeviceInfo";
 import {
@@ -10,7 +9,7 @@ import "../components/charts/SignalCharts.css";
 import useDeviceData from "../hooks/useDeviceData";
 import "./OverviewPage.css";
 
-function OverviewPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
+function OverviewPage({ deviceData }) {
   const {
     regions,
     operators,
@@ -37,24 +36,12 @@ function OverviewPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
     error,
     readingsError,
     refresh,
-  } = useDeviceData(apiMode);
+  } = deviceData;
 
   const r = latestReading;
 
   return (
     <div className="page">
-      <Header
-        activePage={activePage}
-        onNavigate={onNavigate}
-        onRefresh={refresh}
-        loading={loading}
-        regions={regions}
-        selectedRegion={selectedRegion}
-        onRegionChange={setSelectedRegion}
-        apiMode={apiMode}
-        onApiModeChange={onApiModeChange}
-      />
-
       <main className="page-content">
         <section className="page-intro">
           <span className="page-tag">Page 01</span>

@@ -11,7 +11,6 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import Header from "../components/Header/Header";
 import useDeviceData from "../hooks/useDeviceData";
 import "../components/charts/SignalCharts.css";
 import "./ReportsPage.css";
@@ -117,7 +116,7 @@ function buildHistogram(rows, field, min, max, step) {
   return bins;
 }
 
-function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
+function ReportsPage({ deviceData, apiMode }) {
   const {
     regions,
     operators,
@@ -139,7 +138,7 @@ function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
     loading,
     error,
     refresh,
-  } = useDeviceData(apiMode);
+  } = deviceData;
 
   const [compareCityA, setCompareCityA] = useState("");
   const [compareCityB, setCompareCityB] = useState("");
@@ -190,17 +189,6 @@ function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
 
   return (
     <div className="page">
-      <Header
-        activePage={activePage}
-        onNavigate={onNavigate}
-        onRefresh={refresh}
-        loading={loading}
-        regions={regions}
-        selectedRegion={selectedRegion}
-        onRegionChange={setSelectedRegion}
-        apiMode={apiMode}
-        onApiModeChange={onApiModeChange}
-      />
 
       <main className="page-content">
         <section className="page-intro">

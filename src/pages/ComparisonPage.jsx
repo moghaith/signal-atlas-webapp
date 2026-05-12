@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import Header from "../components/Header/Header";
 import useDeviceData from "../hooks/useDeviceData";
 import { getAiDashboardSummary } from "../data/dataService";
 import "./ComparisonPage.css";
@@ -111,7 +110,7 @@ function buildFallbackSummary({
   return `For ${regionLabel} over ${selectedPeriod}, predicted data differs from crowdsourced data by ${sampleGap} samples, with ${topOperator} contributing the highest volume. The average RSRP delta (predicted minus crowdsourced) is ${formatNumber(avgRsrpDelta, 2)} dBm and the coverage quality delta is ${formatNumber(coverageDelta, 1)}%. This suggests meaningful model-to-measurement deviation in parts of the region. Prioritize additional real measurements in low-confidence zones, then investigate operators with negative RSRP deltas for optimization opportunities.`;
 }
 
-function ComparisonPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
+function ComparisonPage({ deviceData, apiMode }) {
   const {
     regions,
     operators,
@@ -132,7 +131,7 @@ function ComparisonPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
     loading,
     error,
     refresh,
-  } = useDeviceData(apiMode);
+  } = deviceData;
 
   const [aiSummary, setAiSummary] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -229,17 +228,6 @@ function ComparisonPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
 
   return (
     <div className="page">
-      <Header
-        activePage={activePage}
-        onNavigate={onNavigate}
-        onRefresh={refresh}
-        loading={loading}
-        regions={regions}
-        selectedRegion={selectedRegion}
-        onRegionChange={setSelectedRegion}
-        apiMode={apiMode}
-        onApiModeChange={onApiModeChange}
-      />
 
       <main className="page-content">
         <section className="page-intro">

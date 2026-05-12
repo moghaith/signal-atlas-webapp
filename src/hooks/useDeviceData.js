@@ -17,7 +17,7 @@ const PREDICTION_SOURCE_NAMES = String(
   .map((value) => value.trim())
   .filter(Boolean);
 
-const ALL_REGIONS_ID = "__all__";
+const ALL_ID = "__all__";
 const EGYPT_BOUNDS = {
   minLat: 21.5,
   maxLat: 32.5,
@@ -53,16 +53,15 @@ function isEgyptRow(row) {
   const lat = toNumber(row?.latitude);
   const lng = toNumber(row?.longitude);
   if (lat == null || lng == null) return false;
-
   const country = String(row?.country || "").trim().toLowerCase();
-  const countryLooksEgypt = country === "egypt" || country.includes("egypt") || country.includes("مصر");
+  const countryLooksEgypt =
+    country === "egypt" || country.includes("egypt") || country.includes("مصر");
   if (countryLooksEgypt) return true;
-
   return (
-    lat >= EGYPT_BOUNDS.minLat
-    && lat <= EGYPT_BOUNDS.maxLat
-    && lng >= EGYPT_BOUNDS.minLng
-    && lng <= EGYPT_BOUNDS.maxLng
+    lat >= EGYPT_BOUNDS.minLat &&
+    lat <= EGYPT_BOUNDS.maxLat &&
+    lng >= EGYPT_BOUNDS.minLng &&
+    lng <= EGYPT_BOUNDS.maxLng
   );
 }
 
@@ -79,15 +78,6 @@ function estimateLevelFromRsrp(rsrp) {
   return 1;
 }
 
-function getRegionLabel(row) {
-  const city = String(row?.city || "").trim();
-  const country = String(row?.country || "").trim();
-  if (city && country) return `${city}, ${country}`;
-  if (city) return city;
-  if (country) return country;
-  return "Unknown region";
-}
-
 function toRadians(value) {
   return (value * Math.PI) / 180;
 }
@@ -100,41 +90,40 @@ function getDistanceKm(aLat, aLng, bLat, bLng) {
   const lat2 = toRadians(bLat);
   const sinLat = Math.sin(dLat / 2);
   const sinLng = Math.sin(dLng / 2);
-  const a = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+  const a =
+    sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
   return 2 * earthRadiusKm * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
 function assignNearbyUnknownRegions(rows, maxDistanceKm = 25) {
   const regionClusters = new Map();
-
   for (const row of rows) {
-    if (row.region_label === "Unknown region") continue;
+    if (!row.city || row.city === "Unknown city") continue;
     if (row.latitude == null || row.longitude == null) continue;
-
-    const cluster = regionClusters.get(row.region_label) || { totalLat: 0, totalLng: 0, count: 0 };
+    const key = row.city;
+    const cluster = regionClusters.get(key) || { totalLat: 0, totalLng: 0, count: 0, country: row.country };
     cluster.totalLat += row.latitude;
     cluster.totalLng += row.longitude;
     cluster.count += 1;
-    regionClusters.set(row.region_label, cluster);
+    regionClusters.set(key, cluster);
   }
 
-  const regionCentroids = Array.from(regionClusters.entries())
-    .map(([label, cluster]) => ({
-      label,
-      latitude: cluster.totalLat / cluster.count,
-      longitude: cluster.totalLng / cluster.count,
-    }));
+  const centroids = Array.from(regionClusters.entries()).map(([city, cluster]) => ({
+    city,
+    country: cluster.country,
+    latitude: cluster.totalLat / cluster.count,
+    longitude: cluster.totalLng / cluster.count,
+  }));
 
-  if (regionCentroids.length === 0) return rows;
+  if (centroids.length === 0) return rows;
 
   return rows.map((row) => {
-    if (row.region_label !== "Unknown region") return row;
+    if (row.city && row.city !== "Unknown city") return row;
     if (row.latitude == null || row.longitude == null) return row;
 
     let nearest = null;
     let nearestDistance = Infinity;
-
-    for (const centroid of regionCentroids) {
+    for (const centroid of centroids) {
       const distance = getDistanceKm(row.latitude, row.longitude, centroid.latitude, centroid.longitude);
       if (distance < nearestDistance) {
         nearestDistance = distance;
@@ -145,8 +134,9 @@ function assignNearbyUnknownRegions(rows, maxDistanceKm = 25) {
     if (!nearest || nearestDistance > maxDistanceKm) return row;
     return {
       ...row,
-      region_label: nearest.label,
-      region_label_source: "inferred",
+      city: nearest.city,
+      country: nearest.country || row.country,
+      city_inferred: true,
     };
   });
 }
@@ -160,13 +150,18 @@ function normalizeConfidence(value) {
 
 function getPredictionConfidence(row) {
   return normalizeConfidence(
-    row?.prediction_confidence ?? row?.confidence ?? row?.confidence_score ?? row?.model_confidence
+    row?.prediction_confidence ??
+      row?.confidence ??
+      row?.confidence_score ??
+      row?.model_confidence
   );
 }
 
 function normalizeRow(row, options = {}) {
   const rsrp = toNumber(row?.rsrp);
   const isPrediction = Boolean(options.isPrediction);
+  const city = String(row?.city || "").trim() || "Unknown city";
+  const country = String(row?.country || "").trim() || "Unknown country";
   return {
     ...row,
     device_id: row?.device_id || row?.source || null,
@@ -177,7 +172,10 @@ function normalizeRow(row, options = {}) {
     rssi: toNumber(row?.rssi),
     asu: row?.asu ?? estimateAsuFromRsrp(rsrp),
     level: row?.level ?? estimateLevelFromRsrp(rsrp),
-    region_label: getRegionLabel(row),
+    city,
+    country,
+    // keep a combined label for backward compat with MapPage popups etc.
+    region_label: city !== "Unknown city" ? `${city}, ${country}` : country,
     operator: row?.operator || "Unknown operator",
     timestamp: row?.timestamp || row?.created_at || null,
     is_prediction: isPrediction,
@@ -211,10 +209,7 @@ function median(values) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-  return sorted[mid];
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 function normalizeRange(value, min, max) {
@@ -225,68 +220,50 @@ function normalizeRange(value, min, max) {
 function computeOverviewMetrics(rows) {
   if (!rows.length) return OVERVIEW_FALLBACK;
 
-  const rsrpValues = rows
-    .map((row) => toNumber(row.rsrp))
-    .filter((value) => value != null);
-  const rsrqValues = rows
-    .map((row) => toNumber(row.rsrq))
-    .filter((value) => value != null);
+  const rsrpValues = rows.map((row) => toNumber(row.rsrp)).filter((v) => v != null);
+  const rsrqValues = rows.map((row) => toNumber(row.rsrq)).filter((v) => v != null);
 
   const meanRsrp = rsrpValues.length
-    ? rsrpValues.reduce((sum, value) => sum + value, 0) / rsrpValues.length
+    ? rsrpValues.reduce((sum, v) => sum + v, 0) / rsrpValues.length
     : null;
   const meanRsrq = rsrqValues.length
-    ? rsrqValues.reduce((sum, value) => sum + value, 0) / rsrqValues.length
+    ? rsrqValues.reduce((sum, v) => sum + v, 0) / rsrqValues.length
     : null;
 
   const coverageQualityPercent = rsrpValues.length
-    ? (rsrpValues.filter((value) => value >= -100).length / rsrpValues.length) * 100
+    ? (rsrpValues.filter((v) => v >= -100).length / rsrpValues.length) * 100
     : null;
 
   const rsrpNorm = normalizeRange(meanRsrp, -120, -70);
   const rsrqNorm = normalizeRange(meanRsrq, -20, -3);
-  const signalQualityIndex = rsrpNorm != null && rsrqNorm != null
-    ? (rsrpNorm + rsrqNorm) / 2
-    : null;
+  const signalQualityIndex =
+    rsrpNorm != null && rsrqNorm != null ? (rsrpNorm + rsrqNorm) / 2 : null;
 
   const uniqueCoordinates = new Set(
     rows
-      .filter((row) => row.latitude != null && row.longitude != null)
-      .map((row) => `${Number(row.latitude).toFixed(5)},${Number(row.longitude).toFixed(5)}`)
+      .filter((r) => r.latitude != null && r.longitude != null)
+      .map((r) => `${Number(r.latitude).toFixed(5)},${Number(r.longitude).toFixed(5)}`)
   ).size;
-  const measurementsDensity = uniqueCoordinates > 0
-    ? rows.length / uniqueCoordinates
-    : null;
+  const measurementsDensity = uniqueCoordinates > 0 ? rows.length / uniqueCoordinates : null;
 
-  const devicesCount = new Set(
-    rows
-      .map((row) => row.device_id)
-      .filter(Boolean)
-  ).size;
-
-  const detectedCellsCount = new Set(
-    rows
-      .map((row) => row.cell_id)
-      .filter(Boolean)
-  ).size;
+  const devicesCount = new Set(rows.map((r) => r.device_id).filter(Boolean)).size;
+  const detectedCellsCount = new Set(rows.map((r) => r.cell_id).filter(Boolean)).size;
 
   const latestTimestamp = rows
-    .map((row) => new Date(row.timestamp || 0).getTime())
+    .map((r) => new Date(r.timestamp || 0).getTime())
     .filter(Number.isFinite)
-    .reduce((max, value) => Math.max(max, value), 0);
+    .reduce((max, v) => Math.max(max, v), 0);
 
-  const hoursSinceLatest = latestTimestamp > 0
-    ? (Date.now() - latestTimestamp) / (1000 * 60 * 60)
-    : null;
-  const freshnessScore = hoursSinceLatest == null
-    ? null
-    : Math.max(0, Math.min(1, 1 - (hoursSinceLatest / 168)));
+  const hoursSinceLatest =
+    latestTimestamp > 0 ? (Date.now() - latestTimestamp) / (1000 * 60 * 60) : null;
+  const freshnessScore =
+    hoursSinceLatest == null ? null : Math.max(0, Math.min(1, 1 - hoursSinceLatest / 168));
   const samplesScore = Math.max(0, Math.min(1, rows.length / 500));
   const devicesScore = Math.max(0, Math.min(1, devicesCount / 20));
 
-  const reliabilityParts = [samplesScore, devicesScore, freshnessScore].filter((value) => value != null);
+  const reliabilityParts = [samplesScore, devicesScore, freshnessScore].filter((v) => v != null);
   const coverageReliabilityScore = reliabilityParts.length
-    ? reliabilityParts.reduce((sum, value) => sum + value, 0) / reliabilityParts.length
+    ? reliabilityParts.reduce((sum, v) => sum + v, 0) / reliabilityParts.length
     : null;
 
   return {
@@ -305,17 +282,11 @@ function computeOverviewMetrics(rows) {
 
 function buildCitySummaries(rows) {
   const byCity = new Map();
-
   for (const row of rows) {
     const city = String(row.city || "").trim() || "Unknown city";
-    const country = String(row.country || "").trim() || "Egypt";
+    const country = String(row.country || "").trim() || "Unknown country";
     const cityLabel = `${city}, ${country}`;
-    const entry = byCity.get(cityLabel) || {
-      city,
-      country,
-      city_label: cityLabel,
-      rows: [],
-    };
+    const entry = byCity.get(cityLabel) || { city, country, city_label: cityLabel, rows: [] };
     entry.rows.push(row);
     byCity.set(cityLabel, entry);
   }
@@ -346,7 +317,6 @@ function aggregateTrendRows(rows, period) {
   for (const row of rows) {
     const ts = new Date(row?.timestamp || 0).getTime();
     if (!Number.isFinite(ts)) continue;
-
     const bucketStart = Math.floor(ts / bucketSize) * bucketSize;
     const entry = buckets.get(bucketStart) || {
       bucketStart,
@@ -357,22 +327,17 @@ function aggregateTrendRows(rows, period) {
       rsrqSum: 0,
       rsrqCount: 0,
     };
-
     entry.total += 1;
-
     if (row?.rsrp != null && Number.isFinite(Number(row.rsrp))) {
       const rsrp = Number(row.rsrp);
       entry.rsrpSum += rsrp;
       entry.rsrpCount += 1;
       if (rsrp >= -100) entry.rsrpGood += 1;
     }
-
     if (row?.rsrq != null && Number.isFinite(Number(row.rsrq))) {
-      const rsrq = Number(row.rsrq);
-      entry.rsrqSum += rsrq;
+      entry.rsrqSum += Number(row.rsrq);
       entry.rsrqCount += 1;
     }
-
     buckets.set(bucketStart, entry);
   }
 
@@ -382,7 +347,8 @@ function aggregateTrendRows(rows, period) {
       timestamp: new Date(entry.bucketStart).toISOString(),
       mean_rsrp: entry.rsrpCount > 0 ? entry.rsrpSum / entry.rsrpCount : null,
       mean_rsrq: entry.rsrqCount > 0 ? entry.rsrqSum / entry.rsrqCount : null,
-      coverage_quality_percent: entry.rsrpCount > 0 ? (entry.rsrpGood / entry.rsrpCount) * 100 : null,
+      coverage_quality_percent:
+        entry.rsrpCount > 0 ? (entry.rsrpGood / entry.rsrpCount) * 100 : null,
       total_readings: entry.total,
     }));
 }
@@ -390,7 +356,6 @@ function aggregateTrendRows(rows, period) {
 function filterByPeriod(rows, period) {
   const windowMs = periodToMs(period);
   if (!windowMs) return rows;
-
   const cutoff = Date.now() - windowMs;
   return rows.filter((row) => {
     const ts = new Date(row.timestamp || 0).getTime();
@@ -398,15 +363,99 @@ function filterByPeriod(rows, period) {
   });
 }
 
+// ─── Filter helpers ────────────────────────────────────────────────────────────
+
+function buildCountryOptions(rows) {
+  const counts = new Map();
+  for (const row of rows) {
+    // Use the already-normalized fields; region_label is always set
+    const country = String(row?.country || "").trim() || 
+                    row.region_label?.split(", ").slice(-1)[0] || 
+                    "Unknown country";
+    counts.set(country, (counts.get(country) || 0) + 1);
+  }
+  const options = Array.from(counts.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([country, count]) => ({ id: country, label: country, reading_count: count }));
+  const total = options.reduce((sum, o) => sum + o.reading_count, 0);
+  return options.length > 0
+    ? [{ id: ALL_ID, label: "All countries", reading_count: total }, ...options]
+    : options;
+}
+
+function buildCityOptions(rows, selectedCountry) {
+  const source =
+    selectedCountry && selectedCountry !== ALL_ID
+      ? rows.filter((row) => {
+          const country = String(row?.country || "").trim() ||
+                          row.region_label?.split(", ").slice(-1)[0] || 
+                          "Unknown country";
+          return country === selectedCountry;
+        })
+      : rows;
+
+  const counts = new Map();
+  for (const row of source) {
+    const city = String(row?.city || "").trim() || 
+                 row.region_label?.split(", ")[0] || 
+                 "Unknown city";
+    counts.set(city, (counts.get(city) || 0) + 1);
+  }
+  const options = Array.from(counts.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([city, count]) => ({ id: city, label: city, reading_count: count }));
+  const total = options.reduce((sum, o) => sum + o.reading_count, 0);
+  return options.length > 0
+    ? [{ id: ALL_ID, label: "All cities", reading_count: total }, ...options]
+    : options;
+}
+
+function resolveCountry(row) {
+  return (
+    String(row?.country || "").trim() ||
+    row.region_label?.split(", ").slice(-1)[0] ||
+    "Unknown country"
+  );
+}
+
+function resolveCity(row) {
+  return (
+    String(row?.city || "").trim() ||
+    row.region_label?.split(", ")[0] ||
+    "Unknown city"
+  );
+}
+
+function filterByCountry(rows, selectedCountry) {
+  if (!selectedCountry || selectedCountry === ALL_ID) return rows;
+  return rows.filter((row) => resolveCountry(row) === selectedCountry);
+}
+
+function filterByCity(rows, selectedCity) {
+  if (!selectedCity || selectedCity === ALL_ID) return rows;
+  return rows.filter((row) => resolveCity(row) === selectedCity);
+}
+
+// ─── Hook ──────────────────────────────────────────────────────────────────────
+
 export default function useDeviceData(apiMode = "device") {
   const effectiveApiMode = apiMode === "mobile" ? "supabase" : apiMode;
 
   const [devices, setDevices] = useState([]);
+
+  // Country / city replace the old single "region" selector
+  const [countries, setCountries] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [selectedCountry, setSelectedCountry] = useState(ALL_ID);
+  const [selectedCity, setSelectedCity] = useState(ALL_ID);
+
+  // Keep `regions` + `selectedRegion` as derived aliases so existing page
+  // components that still use the old API continue to work unchanged.
   const [regions, setRegions] = useState([]);
+  const [selectedRegion, setSelectedRegion] = useState("");
+
   const [operators, setOperators] = useState([]);
   const [networkTypes, setNetworkTypes] = useState([]);
-
-  const [selectedRegion, setSelectedRegion] = useState("");
   const [selectedOperator, setSelectedOperator] = useState("all");
   const [selectedNetworkType, setSelectedNetworkType] = useState("all");
   const [selectedPeriod, setSelectedPeriod] = useState("all");
@@ -427,6 +476,12 @@ export default function useDeviceData(apiMode = "device") {
   const [readingsError, setReadingsError] = useState(null);
   const [error, setError] = useState(null);
 
+  // When the user picks a country, reset city to ALL
+  const handleSetSelectedCountry = useCallback((country) => {
+    setSelectedCountry(country);
+    setSelectedCity(ALL_ID);
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -434,17 +489,12 @@ export default function useDeviceData(apiMode = "device") {
 
     try {
       if (effectiveApiMode === "mobile") {
-        const periodMap = {
-          "24h": "day",
-          week: "week",
-          month: "month",
-          all: "all",
-        };
+        const periodMap = { "24h": "day", week: "week", month: "month", all: "all" };
 
         const operatorList = await getMobileOperators();
         const operatorOptions = [
           { id: "all", label: "All operators" },
-          ...(operatorList || []).map((operator) => ({ id: operator, label: operator })),
+          ...(operatorList || []).map((op) => ({ id: op, label: op })),
         ];
         setOperators(operatorOptions);
 
@@ -466,14 +516,16 @@ export default function useDeviceData(apiMode = "device") {
         ]);
 
         const normalizedMap = (map || [])
-          .map((point, index) => normalizeRow({
-            ...point,
-            device_id: point.device_id || `mobile-point-${index + 1}`,
-            operator: point.operator || (validOperator !== "all" ? validOperator : "Mixed"),
-            city: "Mobile",
-            country: "Data",
-          }))
-          .filter((point) => point.latitude != null && point.longitude != null);
+          .map((point, index) =>
+            normalizeRow({
+              ...point,
+              device_id: point.device_id || `mobile-point-${index + 1}`,
+              operator: point.operator || (validOperator !== "all" ? validOperator : "Mixed"),
+              city: "Mobile",
+              country: "Data",
+            })
+          )
+          .filter((p) => p.latitude != null && p.longitude != null);
 
         const normalizedReadings = (trends || []).map((row) => {
           const rsrp = toNumber(row.rsrp);
@@ -492,23 +544,36 @@ export default function useDeviceData(apiMode = "device") {
           });
         });
 
-        const fallbackRsrp = toNumber(overview?.mean_rsrp ?? overview?.avg_rsrp ?? overview?.rsrp);
-        const latest = normalizedReadings[normalizedReadings.length - 1] || normalizeRow({
-          timestamp: overview?.last_timestamp || normalizedMap[0]?.timestamp || new Date().toISOString(),
-          rsrp: fallbackRsrp,
-          rssi: null,
-          rsrq: toNumber(overview?.mean_rsrq ?? overview?.avg_rsrq ?? overview?.rsrq),
-          asu: estimateAsuFromRsrp(fallbackRsrp),
-          level: estimateLevelFromRsrp(fallbackRsrp),
-          latitude: normalizedMap[0]?.latitude ?? null,
-          longitude: normalizedMap[0]?.longitude ?? null,
-          operator: validOperator !== "all" ? validOperator : "Mixed",
-          city: "Mobile",
-          country: "Data",
-        });
+        const fallbackRsrp = toNumber(
+          overview?.mean_rsrp ?? overview?.avg_rsrp ?? overview?.rsrp
+        );
+        const latest =
+          normalizedReadings[normalizedReadings.length - 1] ||
+          normalizeRow({
+            timestamp:
+              overview?.last_timestamp ||
+              normalizedMap[0]?.timestamp ||
+              new Date().toISOString(),
+            rsrp: fallbackRsrp,
+            rssi: null,
+            rsrq: toNumber(overview?.mean_rsrq ?? overview?.avg_rsrq ?? overview?.rsrq),
+            asu: estimateAsuFromRsrp(fallbackRsrp),
+            level: estimateLevelFromRsrp(fallbackRsrp),
+            latitude: normalizedMap[0]?.latitude ?? null,
+            longitude: normalizedMap[0]?.longitude ?? null,
+            operator: validOperator !== "all" ? validOperator : "Mixed",
+            city: "Mobile",
+            country: "Data",
+          });
 
-        const mobileRegion = [{ id: "Mobile, Data", label: "Mobile, Data" }];
-        setRegions(mobileRegion);
+        const mobileCountry = [{ id: ALL_ID, label: "All countries", reading_count: normalizedMap.length }];
+        const mobileCity = [{ id: ALL_ID, label: "All cities", reading_count: normalizedMap.length }];
+        setCountries(mobileCountry);
+        setCities(mobileCity);
+        setSelectedCountry(ALL_ID);
+        setSelectedCity(ALL_ID);
+        // legacy aliases
+        setRegions([{ id: "Mobile, Data", label: "Mobile, Data" }]);
         setSelectedRegion("Mobile, Data");
         setDevices([]);
 
@@ -522,17 +587,25 @@ export default function useDeviceData(apiMode = "device") {
         return;
       }
 
-      const loadDevices = effectiveApiMode === "supabase" ? getSupabaseDeviceSources : getDevicesWithInfo;
-      const loadReadings = effectiveApiMode === "supabase" ? getSupabaseDeviceReadings : getDeviceReadings;
+      // ── supabase / device mode ──────────────────────────────────────────────
+
+      const loadDevices =
+        effectiveApiMode === "supabase" ? getSupabaseDeviceSources : getDevicesWithInfo;
+      const loadReadings =
+        effectiveApiMode === "supabase" ? getSupabaseDeviceReadings : getDeviceReadings;
 
       const devicesData = await loadDevices();
       setDevices(devicesData || []);
 
-      const regularDevices = (devicesData || []).filter((d) => d?.device_id && !isPredictionSource(d.device_id));
+      const regularDevices = (devicesData || []).filter(
+        (d) => d?.device_id && !isPredictionSource(d.device_id)
+      );
       const denseReadingsLimit = effectiveApiMode === "supabase" ? 20000 : 1000;
 
       const regularHistories = await Promise.all(
-        regularDevices.map((device) => loadReadings(device.device_id, denseReadingsLimit).catch(() => []))
+        regularDevices.map((device) =>
+          loadReadings(device.device_id, denseReadingsLimit).catch(() => [])
+        )
       );
 
       const regularRows = regularHistories
@@ -542,8 +615,8 @@ export default function useDeviceData(apiMode = "device") {
         .filter(isEgyptRow);
 
       const predictionHistory = await Promise.all(
-        PREDICTION_SOURCE_NAMES.map((predictionSource) =>
-          loadReadings(predictionSource, denseReadingsLimit).catch(() => [])
+        PREDICTION_SOURCE_NAMES.map((src) =>
+          loadReadings(src, denseReadingsLimit).catch(() => [])
         )
       );
 
@@ -555,49 +628,75 @@ export default function useDeviceData(apiMode = "device") {
 
       const periodRegular = filterByPeriod(regularRows, selectedPeriod);
       const periodPredictions = filterByPeriod(rawPredictionRows, selectedPeriod);
-      const periodCombined = assignNearbyUnknownRegions([...periodRegular, ...periodPredictions]);
+      const periodCombined = assignNearbyUnknownRegions([
+        ...periodRegular,
+        ...periodPredictions,
+      ]);
       const scopedRegular = periodCombined.filter((row) => !row.is_prediction);
       const scopedPredictions = periodCombined.filter((row) => row.is_prediction);
 
-      let regionSourceRows = periodCombined;
-      if (dataSourceMode === "predicted") {
-        regionSourceRows = scopedPredictions;
-      } else if (dataSourceMode === "crowdsourced") {
-        regionSourceRows = scopedRegular;
-      }
+      // ── Build country / city options from all rows ──────────────────────────
+      let rowsForOptions = scopedRegular;
+      if (dataSourceMode === "predicted") rowsForOptions = scopedPredictions;
+      else if (dataSourceMode === "both") rowsForOptions = periodCombined;
 
+      const countryOptions = buildCountryOptions(rowsForOptions);
+      setCountries(countryOptions);
+
+      const validCountry = countryOptions.some((c) => c.id === selectedCountry)
+        ? selectedCountry
+        : countryOptions[0]?.id || ALL_ID;
+      // Don't call the setter — we only update internal derived state here; the
+      // state setter is exposed to the consumer directly.
+      // (selectedCountry will become validCountry on next render cycle; that's
+      // acceptable since refresh() is async.)
+
+      const cityOptions = buildCityOptions(rowsForOptions, validCountry);
+      setCities(cityOptions);
+
+      const validCity = cityOptions.some((c) => c.id === selectedCity)
+        ? selectedCity
+        : ALL_ID;
+
+      // ── Legacy region aliases (city, country combo) for backward compat ─────
       const regionMap = new Map();
-      for (const row of regionSourceRows) {
+      for (const row of rowsForOptions) {
         const key = row.region_label;
         const entry = regionMap.get(key) || { id: key, label: key, reading_count: 0 };
         entry.reading_count += 1;
         regionMap.set(key, entry);
       }
-      const regionOptions = Array.from(regionMap.values()).sort((a, b) => a.label.localeCompare(b.label));
-      const totalRegionReadings = regionOptions.reduce((sum, option) => sum + (option.reading_count || 0), 0);
-      const regionOptionsWithAll = regionOptions.length > 0
-        ? [{ id: ALL_REGIONS_ID, label: "All regions", reading_count: totalRegionReadings }, ...regionOptions]
-        : regionOptions;
+      const regionOptions = Array.from(regionMap.values()).sort((a, b) =>
+        a.label.localeCompare(b.label)
+      );
+      const total = regionOptions.reduce((sum, o) => sum + (o.reading_count || 0), 0);
+      const regionOptionsWithAll =
+        regionOptions.length > 0
+          ? [{ id: ALL_ID, label: "All regions", reading_count: total }, ...regionOptions]
+          : regionOptions;
       setRegions(regionOptionsWithAll);
-
       const validRegion = regionOptionsWithAll.some((r) => r.id === selectedRegion)
         ? selectedRegion
-        : (regionOptionsWithAll[0]?.id || "");
+        : regionOptionsWithAll[0]?.id || "";
       setSelectedRegion(validRegion);
 
-      const regionFilter = validRegion && validRegion !== ALL_REGIONS_ID ? validRegion : null;
-      const byRegionRegular = regionFilter ? scopedRegular.filter((r) => r.region_label === regionFilter) : scopedRegular;
-      const byRegionPredictions = regionFilter ? scopedPredictions.filter((r) => r.region_label === regionFilter) : scopedPredictions;
+      // ── Apply country + city filter ─────────────────────────────────────────
+      const applyGeoFilter = (rows) => filterByCity(filterByCountry(rows, validCountry), validCity);
 
+      const geoRegular = applyGeoFilter(scopedRegular);
+      const geoPredictions = applyGeoFilter(scopedPredictions);
+
+      // ── Network types ────────────────────────────────────────────────────────
       const networkTypeSet = new Set(
-        [...byRegionRegular, ...byRegionPredictions]
-          .map((row) => String(row.network_type || "Unknown network").trim() || "Unknown network")
+        [...geoRegular, ...geoPredictions].map(
+          (row) => String(row.network_type || "Unknown network").trim() || "Unknown network"
+        )
       );
       const networkTypeOptions = [
         { id: "all", label: "All network types" },
         ...Array.from(networkTypeSet)
           .sort((a, b) => a.localeCompare(b))
-          .map((networkType) => ({ id: networkType, label: networkType })),
+          .map((nt) => ({ id: nt, label: nt })),
       ];
       setNetworkTypes(networkTypeOptions);
 
@@ -606,30 +705,27 @@ export default function useDeviceData(apiMode = "device") {
         : "all";
       setSelectedNetworkType(validNetworkType);
 
-      const networkFilteredRegularAll = validNetworkType === "all"
-        ? scopedRegular
-        : scopedRegular.filter((row) => (String(row.network_type || "Unknown network").trim() || "Unknown network") === validNetworkType);
+      const ntFilter = (rows) =>
+        validNetworkType === "all"
+          ? rows
+          : rows.filter(
+              (row) =>
+                (String(row.network_type || "Unknown network").trim() || "Unknown network") ===
+                validNetworkType
+            );
 
-      const networkFilteredPredictionsAll = validNetworkType === "all"
-        ? scopedPredictions
-        : scopedPredictions.filter((row) => (String(row.network_type || "Unknown network").trim() || "Unknown network") === validNetworkType);
+      const ntRegular = ntFilter(geoRegular);
+      const ntPredictions = ntFilter(geoPredictions);
 
-      const networkFilteredRegularRegion = regionFilter
-        ? networkFilteredRegularAll.filter((row) => row.region_label === regionFilter)
-        : networkFilteredRegularAll;
-
-      const networkFilteredPredictionsRegion = regionFilter
-        ? networkFilteredPredictionsAll.filter((row) => row.region_label === regionFilter)
-        : networkFilteredPredictionsAll;
-
+      // ── Operators ────────────────────────────────────────────────────────────
       const operatorSet = new Set(
-        [...networkFilteredRegularRegion, ...networkFilteredPredictionsRegion]
-          .map((row) => row.operator)
-          .filter(Boolean)
+        [...ntRegular, ...ntPredictions].map((row) => row.operator).filter(Boolean)
       );
       const operatorOptions = [
         { id: "all", label: "All operators" },
-        ...Array.from(operatorSet).sort((a, b) => a.localeCompare(b)).map((operator) => ({ id: operator, label: operator })),
+        ...Array.from(operatorSet)
+          .sort((a, b) => a.localeCompare(b))
+          .map((op) => ({ id: op, label: op })),
       ];
       setOperators(operatorOptions);
 
@@ -638,39 +734,44 @@ export default function useDeviceData(apiMode = "device") {
         : "all";
       setSelectedOperator(validOperator);
 
-      const operatorFilteredRegularAll = validOperator === "all"
-        ? networkFilteredRegularAll
-        : networkFilteredRegularAll.filter((row) => row.operator === validOperator);
+      const opFilter = (rows) =>
+        validOperator === "all" ? rows : rows.filter((row) => row.operator === validOperator);
 
-      const operatorFilteredPredictionsBaseAll = validOperator === "all"
-        ? networkFilteredPredictionsAll
-        : networkFilteredPredictionsAll.filter((row) => row.operator === validOperator);
+      const opRegularAll = opFilter(
+        validNetworkType === "all"
+          ? applyGeoFilter(scopedRegular)
+          : applyGeoFilter(scopedRegular).filter(
+              (row) =>
+                (String(row.network_type || "Unknown network").trim() || "Unknown network") ===
+                validNetworkType
+            )
+      );
 
-      const operatorFilteredPredictionsAll = predictionConfidenceMin > 0
-        ? operatorFilteredPredictionsBaseAll.filter(
-            (row) => row.prediction_confidence != null && row.prediction_confidence >= predictionConfidenceMin
-          )
-        : operatorFilteredPredictionsBaseAll;
+      const opPredictionsBase = opFilter(
+        validNetworkType === "all"
+          ? applyGeoFilter(scopedPredictions)
+          : applyGeoFilter(scopedPredictions).filter(
+              (row) =>
+                (String(row.network_type || "Unknown network").trim() || "Unknown network") ===
+                validNetworkType
+            )
+      );
 
-      const operatorFilteredRegularRegion = regionFilter
-        ? operatorFilteredRegularAll.filter((row) => row.region_label === regionFilter)
-        : operatorFilteredRegularAll;
+      const opPredictionsAll =
+        predictionConfidenceMin > 0
+          ? opPredictionsBase.filter(
+              (row) =>
+                row.prediction_confidence != null &&
+                row.prediction_confidence >= predictionConfidenceMin
+            )
+          : opPredictionsBase;
 
-      const operatorFilteredPredictionsRegion = regionFilter
-        ? operatorFilteredPredictionsAll.filter((row) => row.region_label === regionFilter)
-        : operatorFilteredPredictionsAll;
+      // ── Effective rows based on data source mode ──────────────────────────
+      let effectiveRowsAll = opRegularAll;
+      if (dataSourceMode === "predicted") effectiveRowsAll = opPredictionsAll;
+      else if (dataSourceMode === "both") effectiveRowsAll = [...opRegularAll, ...opPredictionsAll];
 
-      let effectiveRowsAll = operatorFilteredRegularAll;
-      let effectiveRowsRegion = operatorFilteredRegularRegion;
-      if (dataSourceMode === "predicted") {
-        effectiveRowsAll = operatorFilteredPredictionsAll;
-        effectiveRowsRegion = operatorFilteredPredictionsRegion;
-      } else if (dataSourceMode === "both") {
-        effectiveRowsAll = [...operatorFilteredRegularAll, ...operatorFilteredPredictionsAll];
-        effectiveRowsRegion = [...operatorFilteredRegularRegion, ...operatorFilteredPredictionsRegion];
-      }
-
-      setPredictionPoints(operatorFilteredPredictionsAll);
+      setPredictionPoints(opPredictionsAll);
       setHeatmapPoints(effectiveRowsAll);
 
       const latestByDevice = new Map();
@@ -681,23 +782,28 @@ export default function useDeviceData(apiMode = "device") {
           latestByDevice.set(did, row);
         }
       }
-      const effectiveMapPoints = Array.from(latestByDevice.values());
-      setMapPoints(effectiveMapPoints);
+      setMapPoints(Array.from(latestByDevice.values()));
 
-      const history = [...effectiveRowsRegion].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      const history = [...effectiveRowsAll].sort(
+        (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+      );
       const latest = history[history.length - 1] || null;
 
       setLatestReading(latest);
       setReadings(history.slice(-250));
       setTrendPoints(aggregateTrendRows(history, selectedPeriod));
-      setOverviewMetrics(computeOverviewMetrics(effectiveRowsRegion));
+      setOverviewMetrics(computeOverviewMetrics(effectiveRowsAll));
       setCitySummaries(buildCitySummaries(effectiveRowsAll));
-      setSelectedPoint(effectiveMapPoints[0] || latest || null);
+      setSelectedPoint(Array.from(latestByDevice.values())[0] || latest || null);
     } catch (err) {
       setDevices([]);
+      setCountries([]);
+      setCities([]);
       setRegions([]);
       setOperators([]);
       setNetworkTypes([]);
+      setSelectedCountry(ALL_ID);
+      setSelectedCity(ALL_ID);
       setSelectedRegion("");
       setSelectedOperator("all");
       setSelectedNetworkType("all");
@@ -713,13 +819,23 @@ export default function useDeviceData(apiMode = "device") {
     } finally {
       setLoading(false);
     }
-  }, [effectiveApiMode, selectedRegion, selectedOperator, selectedNetworkType, selectedPeriod, dataSourceMode, predictionConfidenceMin]);
+  }, [
+    effectiveApiMode,
+    selectedCountry,
+    selectedCity,
+    selectedOperator,
+    selectedNetworkType,
+    selectedPeriod,
+    dataSourceMode,
+    predictionConfidenceMin,
+    selectedRegion,
+  ]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const selectedRegionInfo = regions.find((region) => region.id === selectedRegion) || null;
+  const selectedRegionInfo = regions.find((r) => r.id === selectedRegion) || null;
 
   const setSelectedFromMap = useCallback((point) => {
     setSelectedPoint(point);
@@ -727,11 +843,22 @@ export default function useDeviceData(apiMode = "device") {
 
   return {
     devices,
+
+    // ── New split selectors ──────────────────────────────────────────────────
+    countries,
+    cities,
+    selectedCountry,
+    setSelectedCountry: handleSetSelectedCountry,
+    selectedCity,
+    setSelectedCity,
+
+    // ── Legacy aliases (unchanged API for existing page components) ──────────
     regions,
-    operators,
-    networkTypes,
     selectedRegion,
     setSelectedRegion,
+
+    operators,
+    networkTypes,
     selectedOperator,
     setSelectedOperator,
     selectedNetworkType,
