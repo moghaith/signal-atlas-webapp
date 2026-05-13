@@ -1,9 +1,20 @@
 .header-shell {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 9999;
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
+}
+
+.leaflet-container {
+  z-index: 1 !important;
+}
+
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom,
+.leaflet-control {
+  z-index: 2 !important;
 }
 
 /* SINGLE ROW */

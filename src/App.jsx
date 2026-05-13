@@ -2,11 +2,13 @@ import { Suspense, lazy, useState } from "react";
 import Mockup from "./Mockup";
 import Header from "./components/Header/Header";
 import useDeviceData from "./hooks/useDeviceData";
+import './App.css'// index.js
 
 const OverviewPage = lazy(() => import("./pages/OverviewPage"));
 const MapPage = lazy(() => import("./pages/MapPage"));
 const ComparisonPage = lazy(() => import("./pages/ComparisonPage"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const CoverageRequestPage = lazy(() => import("./pages/CoverageRequestPage"));
 
 function AppShell() {
   const [activePage, setActivePage] = useState("overview");
@@ -75,6 +77,7 @@ function PageContent({ activePage, deviceData, apiMode }) {
     case "detail":  return <ComparisonPage {...sharedProps} />;
     case "map":     return <MapPage        {...sharedProps} />;
     case "reports": return <ReportsPage    {...sharedProps} />;
+    case "coverage": return <CoverageRequestPage {...sharedProps} />;
     default:        return <OverviewPage   {...sharedProps} />;
   }
 }

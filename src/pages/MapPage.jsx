@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Select from "react-select";
+import { selectStyles } from "../styles/selectStyles";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.heat";
@@ -8,6 +10,7 @@ import {
   getSupabaseReadingDistributions,
 } from "../data/dataService";
 import "./MapPage.css";
+import "../styles/global.css";
 
 const ALL_REGIONS_ID = "__all__";
 
@@ -208,6 +211,20 @@ function getQuality(point) {
   return { label: "Poor", color: "#ef4444" };
 }
 
+function ResizeMap({ expanded }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+
+    return () => clearTimeout(timeout);
+  }, [expanded, map]);
+
+  return null;
+}
+
 function MapPage({ deviceData, apiMode }) {
   const {
     regions,
@@ -359,15 +376,146 @@ function MapPage({ deviceData, apiMode }) {
 
       <main className="page-content">
         <section className="page-intro">
-          <span className="page-tag">Page 03</span>
           <h2>Map View</h2>
           <p>
-            Regional map analytics for signal quality. Heat mode supports average RSRP, average RSRQ,
-            or measurement density with a shared blue-to-yellow palette.
+            Interactive regional signal quality visualization.
+            Supports heatmap modes for average RSRP, average RSRQ, or measurement density.
           </p>
         </section>
 
         <section className="map-filters">
+
+          {/* ================= CORE DATA ================= */}
+
+          <div className="map-toggle">
+            <span>Operator</span>
+            <Select
+              value={operators
+                .map((o) => ({ value: o.id, label: o.label }))
+                .find((o) => o.value === selectedOperator)}
+              onChange={(opt) => setSelectedOperator(opt?.value)}
+              options={operators.map((o) => ({
+                value: o.id,
+                label: o.label,
+              }))}
+              isSearchable={false}
+              styles={selectStyles}
+            />
+          </div>
+
+          <div className="map-toggle">
+            <span>Network type</span>
+            <Select
+              value={networkTypes
+                .map((n) => ({ value: n.id, label: n.label }))
+                .find((o) => o.value === selectedNetworkType)}
+              onChange={(opt) => setSelectedNetworkType(opt?.value)}
+              options={networkTypes.map((n) => ({
+                value: n.id,
+                label: n.label,
+              }))}
+              isSearchable={false}
+              styles={selectStyles}
+            />
+          </div>
+
+          <div className="map-toggle">
+            <span>Period</span>
+            <Select
+              value={[
+                { value: "24h", label: "Last 24h" },
+                { value: "week", label: "Last week" },
+                { value: "month", label: "Last month" },
+                { value: "all", label: "All history" },
+              ].find((o) => o.value === selectedPeriod)}
+              onChange={(opt) => setSelectedPeriod(opt?.value)}
+              options={[
+                { value: "24h", label: "Last 24h" },
+                { value: "week", label: "Last week" },
+                { value: "month", label: "Last month" },
+                { value: "all", label: "All history" },
+              ]}
+              isSearchable={false}
+              styles={selectStyles}
+            />
+          </div>
+
+          <div className="map-toggle">
+            <span>Data source</span>
+            <Select
+              value={[
+                { value: "crowdsourced", label: "Crowdsourced only" },
+                { value: "predicted", label: "ML model (predicted)" },
+                { value: "both", label: "Both" },
+              ].find((o) => o.value === dataSourceMode)}
+              onChange={(opt) => setDataSourceMode(opt?.value)}
+              options={[
+                { value: "crowdsourced", label: "Crowdsourced only" },
+                { value: "predicted", label: "ML model (predicted)" },
+                { value: "both", label: "Both" },
+              ]}
+              isSearchable={false}
+              styles={selectStyles}
+            />
+          </div>
+
+          {/* ================= VISUALIZATION ================= */}
+
+          <label className="map-toggle">
+            <input
+              type="checkbox"
+              checked={showHeatView}
+              onChange={(e) => setShowHeatView(e.target.checked)}
+            />
+            <span>Heat view overlay</span>
+          </label>
+
+          <div className="map-toggle">
+            <span>Heat metric</span>
+            <Select
+              value={[
+                { value: "rsrp", label: "RSRP (avg)" },
+                { value: "rsrq", label: "RSRQ (avg)" },
+                { value: "density", label: "Density" },
+              ].find((o) => o.value === heatMetric)}
+              onChange={(opt) => setHeatMetric(opt?.value)}
+              options={[
+                { value: "rsrp", label: "RSRP (avg)" },
+                { value: "rsrq", label: "RSRQ (avg)" },
+                { value: "density", label: "Density" },
+              ]}
+              isSearchable={false}
+              styles={selectStyles}
+            />
+          </div>
+
+          {/* ================= ADVANCED ================= */}
+
+          {(dataSourceMode === "predicted" || dataSourceMode === "both") && (
+            <div className="map-toggle">
+              <span>Min prediction confidence</span>
+              <Select
+                value={[
+                  { value: 0, label: "Any" },
+                  { value: 0.5, label: "50%+" },
+                  { value: 0.7, label: "70%+" },
+                  { value: 0.85, label: "85%+" },
+                ].find((o) => o.value === predictionConfidenceMin)}
+                onChange={(opt) => setPredictionConfidenceMin(opt?.value)}
+                options={[
+                  { value: 0, label: "Any" },
+                  { value: 0.5, label: "50%+" },
+                  { value: 0.7, label: "70%+" },
+                  { value: 0.85, label: "85%+" },
+                ]}
+                isSearchable={false}
+                styles={selectStyles}
+              />
+            </div>
+          )}
+
+          {/* ================= TOGGLES ================= */}
+
           <label className="map-toggle">
             <input
               type="checkbox"
@@ -386,100 +534,12 @@ function MapPage({ deviceData, apiMode }) {
             <span>Show all readings points</span>
           </label>
 
-          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span>Operator</span>
-            <select
-              className="header-device-select"
-              value={selectedOperator}
-              onChange={(e) => setSelectedOperator(e.target.value)}
-            >
-              {operators.map((operator) => (
-                <option key={operator.id} value={operator.id}>{operator.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span>Period</span>
-            <select
-              className="header-device-select"
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-            >
-              <option value="24h">Last 24h</option>
-              <option value="week">Last week</option>
-              <option value="month">Last month</option>
-              <option value="all">All history</option>
-            </select>
-          </div>
-
-          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span>Network type</span>
-            <select
-              className="header-device-select"
-              value={selectedNetworkType}
-              onChange={(e) => setSelectedNetworkType(e.target.value)}
-            >
-              {networkTypes.map((networkType) => (
-                <option key={networkType.id} value={networkType.id}>{networkType.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span>Data source</span>
-            <select
-              className="header-device-select"
-              value={dataSourceMode}
-              onChange={(e) => setDataSourceMode(e.target.value)}
-            >
-              <option value="crowdsourced">Crowdsourced only</option>
-              <option value="predicted">ML model (predicted)</option>
-              <option value="both">Both</option>
-            </select>
-          </div>
-
-          <label className="map-toggle">
-            <input
-              type="checkbox"
-              checked={showHeatView}
-              onChange={(e) => setShowHeatView(e.target.checked)}
-            />
-            <span>Heat view overlay</span>
-          </label>
-
-          <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span>Heat metric</span>
-            <select
-              className="header-device-select"
-              value={heatMetric}
-              onChange={(e) => setHeatMetric(e.target.value)}
-            >
-              <option value="rsrp">RSRP (avg)</option>
-              <option value="rsrq">RSRQ (avg)</option>
-              <option value="density">Density</option>
-            </select>
-          </div>
-
-          {(dataSourceMode === "predicted" || dataSourceMode === "both") && (
-            <div className="map-toggle" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span>Min prediction confidence</span>
-              <select
-                className="header-device-select"
-                value={String(predictionConfidenceMin)}
-                onChange={(e) => setPredictionConfidenceMin(Number(e.target.value))}
-              >
-                <option value="0">Any</option>
-                <option value="0.5">50%+</option>
-                <option value="0.7">70%+</option>
-                <option value="0.85">85%+</option>
-              </select>
-            </div>
-          )}
+          {/* ================= ACTION ================= */}
 
           <button type="button" className="map-refresh" onClick={refresh}>
             Refresh map
           </button>
+
         </section>
 
         <section className="map-stats">
@@ -514,7 +574,15 @@ function MapPage({ deviceData, apiMode }) {
             )}
 
             {!loading && displayedPoints.length > 0 && (
-              <MapContainer key={mapKey} center={mapCenter} zoom={11} className="leaflet-map" preferCanvas={true}>
+              <MapContainer
+                key={mapKey}
+                center={mapCenter}
+                zoom={11}
+                className="leaflet-map"
+                preferCanvas={true}
+              >
+                <ResizeMap expanded={expanded} />
+
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

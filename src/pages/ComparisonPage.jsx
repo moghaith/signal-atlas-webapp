@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import Select from "react-select";
+import { selectStyles } from "../styles/selectStyles";
 import useDeviceData from "../hooks/useDeviceData";
 import { getAiDashboardSummary } from "../data/dataService";
 import "./ComparisonPage.css";
@@ -231,75 +233,107 @@ function ComparisonPage({ deviceData, apiMode }) {
 
       <main className="page-content">
         <section className="page-intro">
-          <span className="page-tag">Page 02</span>
           <h2>Comparison</h2>
           <p>
-            Compare crowdsourced measurements against ML predictions for the currently selected region,
-            operator, period, and confidence threshold.
+            Side-by-side analysis of crowdsourced measurements and ML-generated predictions for the selected region.
           </p>
         </section>
 
-        <section className="comparison-filters">
-          <div className="comparison-filter">
+        <section className="map-filters">
+
+          {/* Operator */}
+          <div className="map-toggle">
             <span>Operator</span>
-            <select
-              className="header-device-select"
-              value="all"
-              disabled
-            >
-              {operators.map((operator) => (
-                <option key={operator.id} value={operator.id}>{operator.label}</option>
-              ))}
-            </select>
+            <Select
+              value={operators
+                .map((o) => ({ value: o.id, label: o.label }))
+                .find((o) => o.value === selectedOperator)}
+              onChange={(opt) => setSelectedOperator(opt?.value)}
+              options={operators.map((o) => ({
+                value: o.id,
+                label: o.label,
+              }))}
+              isSearchable={false}
+              styles={selectStyles}
+            />
           </div>
 
-          <div className="comparison-filter">
+          {/* Period */}
+          <div className="map-toggle">
             <span>Period</span>
-            <select
-              className="header-device-select"
-              value={selectedPeriod}
-              onChange={(event) => setSelectedPeriod(event.target.value)}
-            >
-              <option value="24h">Last 24h</option>
-              <option value="week">Last week</option>
-              <option value="month">Last month</option>
-              <option value="all">All history</option>
-            </select>
+            <Select
+              value={[
+                { value: "24h", label: "Last 24h" },
+                { value: "week", label: "Last week" },
+                { value: "month", label: "Last month" },
+                { value: "all", label: "All history" },
+              ].find((o) => o.value === selectedPeriod)}
+              onChange={(opt) => setSelectedPeriod(opt?.value)}
+              options={[
+                { value: "24h", label: "Last 24h" },
+                { value: "week", label: "Last week" },
+                { value: "month", label: "Last month" },
+                { value: "all", label: "All history" },
+              ]}
+              isSearchable={false}
+              styles={selectStyles}
+            />
           </div>
 
-          <div className="comparison-filter">
+          {/* Network type */}
+          <div className="map-toggle">
             <span>Network type</span>
-            <select
-              className="header-device-select"
-              value={selectedNetworkType}
-              onChange={(event) => setSelectedNetworkType(event.target.value)}
-            >
-              {networkTypes.map((networkType) => (
-                <option key={networkType.id} value={networkType.id}>{networkType.label}</option>
-              ))}
-            </select>
+            <Select
+              value={networkTypes
+                .map((n) => ({ value: n.id, label: n.label }))
+                .find((o) => o.value === selectedNetworkType)}
+              onChange={(opt) => setSelectedNetworkType(opt?.value)}
+              options={networkTypes.map((n) => ({
+                value: n.id,
+                label: n.label,
+              }))}
+              isSearchable={false}
+              styles={selectStyles}
+            />
           </div>
 
-          <div className="comparison-filter">
+          {/* Data source (disabled but same UI style) */}
+          <div className="map-toggle">
             <span>Data source</span>
-            <select className="header-device-select" value="both" disabled>
-              <option value="both">Both (Crowdsourced + Predicted)</option>
-            </select>
+            <Select
+              value={{ value: "both", label: "Both (Crowdsourced + Predicted)" }}
+              isDisabled
+              styles={selectStyles}
+              options={[
+                { value: "both", label: "Both (Crowdsourced + Predicted)" }
+              ]}
+            />
           </div>
 
-          <div className="comparison-filter">
-            <span>Min prediction confidence</span>
-            <select
-              className="header-device-select"
-              value={String(predictionConfidenceMin)}
-              onChange={(event) => setPredictionConfidenceMin(Number(event.target.value))}
-            >
-              <option value="0">Any</option>
-              <option value="0.5">50%+</option>
-              <option value="0.7">70%+</option>
-              <option value="0.85">85%+</option>
-            </select>
-          </div>
+          {/* Conditional */}
+          {(dataSourceMode === "predicted" || dataSourceMode === "both") && (
+            <div className="map-toggle">
+              <span>Min prediction confidence</span>
+              <Select
+                value={[
+                  { value: 0, label: "Any" },
+                  { value: 0.5, label: "50%+" },
+                  { value: 0.7, label: "70%+" },
+                  { value: 0.85, label: "85%+" },
+                ].find((o) => o.value === predictionConfidenceMin)}
+                onChange={(opt) => setPredictionConfidenceMin(opt?.value)}
+                options={[
+                  { value: 0, label: "Any" },
+                  { value: 0.5, label: "50%+" },
+                  { value: 0.7, label: "70%+" },
+                  { value: 0.85, label: "85%+" },
+                ]}
+                isSearchable={false}
+                styles={selectStyles}
+              />
+            </div>
+          )}
+
         </section>
 
         {error && (
