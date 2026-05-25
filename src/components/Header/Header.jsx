@@ -9,6 +9,7 @@ import {
   Map,
   BarChart3,
   RefreshCw,
+  MapPin,
 } from "lucide-react";
 
 function Header({
@@ -29,6 +30,7 @@ function Header({
     { id: "detail", label: "Comparison", icon: GitCompare },
     { id: "map", label: "Map View", icon: Map },
     { id: "reports", label: "Reports", icon: BarChart3 },
+    { id: "coverage", label: "Coverage Request", icon: MapPin },
   ];
 
   // React Select expects { value, label }

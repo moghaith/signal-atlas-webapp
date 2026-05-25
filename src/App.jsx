@@ -8,7 +8,7 @@ const OverviewPage = lazy(() => import("./pages/OverviewPage"));
 const MapPage = lazy(() => import("./pages/MapPage"));
 const ComparisonPage = lazy(() => import("./pages/ComparisonPage"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage"));
-const CoverageRequestPage = lazy(() => import("./pages/CoverageRequestPage"));
+const CoverageRequestPage = lazy(() => import("./pages/coverage/CoverageRequestPage"));
 
 function AppShell() {
   const [activePage, setActivePage] = useState("overview");

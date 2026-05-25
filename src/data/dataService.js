@@ -505,3 +505,13 @@ export async function getAiDashboardSummary(payload) {
 
   throw lastError || new Error('Gemini request failed for all candidate models')
 }
+
+export {
+  getCoverageRequests,
+  getNearbyCoverageRequests,
+  getCoverageRequest,
+  getCoverageRequestProgress,
+  getCoverageRequestContributions,
+  createCoverageRequest,
+  updateCoverageRequest,
+} from "./coverageRequestService";
