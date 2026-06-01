@@ -1,5 +1,7 @@
+import { useState } from "react";
 import Select from "react-select";
 import "./Header.css";
+import { useAuth } from "../../AuthContext";
 import logo from "../../assets/logo_transparent_with_border.png";
 import { selectStyles } from "../../styles/selectStyles";
 
@@ -10,21 +12,26 @@ import {
   BarChart3,
   RefreshCw,
   MapPin,
+  ChevronDown,
+  User,
 } from "lucide-react";
 
-function Header({
-  activePage,
-  onNavigate,
-  onRefresh,
+function Header({ 
+  activePage, 
+  onNavigate, 
+  onRefresh, 
   loading,
 
-  countries = [],
-  cities = [],
-  selectedCountry = "__all__",
-  selectedCity = "__all__",
-  onCountryChange,
-  onCityChange,
-}) {
+  countries, 
+  cities, 
+  selectedCountry, 
+  selectedCity,
+
+  onCountryChange, onCityChange, onLoginClick }) {
+  const { profile } = useAuth();
+
+  const [filtersOpen, setFiltersOpen] = useState(true);
+
   const tabs = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "detail", label: "Comparison", icon: GitCompare },
@@ -33,7 +40,6 @@ function Header({
     { id: "coverage", label: "Coverage Request", icon: MapPin },
   ];
 
-  // React Select expects { value, label }
   const countryOptions = countries.map((c) => ({
     value: c.id,
     label: c.label,
@@ -46,15 +52,19 @@ function Header({
 
   return (
     <header className="header-shell">
+
+      {/* TOP ROW */}
       <div className="header-row">
 
-        {/* LOGO */}
         <div className="header-logo">
-          <img src={logo} alt="Signal Atlas" className="logo-img" />
+          <img
+            src={logo}
+            alt="Signal Atlas"
+            className="logo-img"
+          />
           <span className="logo-text">Signal Atlas</span>
         </div>
 
-        {/* NAV */}
         <nav className="header-nav">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -62,7 +72,9 @@ function Header({
             return (
               <button
                 key={tab.id}
-                className={`nav-link ${activePage === tab.id ? "active" : ""}`}
+                className={`nav-link ${
+                  activePage === tab.id ? "active" : ""
+                }`}
                 onClick={() => onNavigate?.(tab.id)}
               >
                 <Icon size={16} />
@@ -72,52 +84,99 @@ function Header({
           })}
         </nav>
 
-        {/* RIGHT CONTROLS */}
-        <div className="header-right">
+        <div className="header-actions">
 
-          <div className="header-device-wrap">
+          <button className="login-btn" onClick={onLoginClick}>
+            <User size={15} />
+            <span>{profile ? profile.username : "Login"}</span>
+          </button>
 
-            {/* COUNTRY */}
-            <div className="header-device-group">
-              <span className="header-device-label">Country</span>
-              <Select
-                value={countryOptions.find((o) => o.value === selectedCountry)}
-                onChange={(opt) => onCountryChange?.(opt?.value)}
-                options={countryOptions}
-                styles={selectStyles}
-                isSearchable={false}
-              />
-            </div>
-
-            {/* CITY */}
-            <div className="header-device-group">
-              <span className="header-device-label">City</span>
-              <Select
-                value={cityOptions.find((o) => o.value === selectedCity)}
-                onChange={(opt) => onCityChange?.(opt?.value)}
-                options={cityOptions}
-                styles={selectStyles}
-                isSearchable={false}
-              />
-            </div>
-
-          </div>
-
-          {/* REFRESH */}
           <button
-            className="refresh-btn"
-            onClick={onRefresh}
-            disabled={loading}
-            title="Refresh data"
+            className={`filter-toggle-btn ${
+              filtersOpen ? "open" : ""
+            }`}
+            onClick={() => setFiltersOpen((v) => !v)}
+            title={
+              filtersOpen
+                ? "Hide filters"
+                : "Show filters"
+            }
           >
-            <RefreshCw
-              size={16}
-              className={loading ? "refresh-icon spinning" : "refresh-icon"}
-            />
+            <ChevronDown size={18} />
           </button>
 
         </div>
 
+      </div>
+
+      {/* FILTER ROW */}
+      <div
+        className={`filter-row-wrapper ${
+          filtersOpen ? "open" : ""
+        }`}
+      >
+        <div className="filter-row">
+
+          <div className="filter-left">
+
+            <div className="filter-group">
+              <span className="filter-label">
+                Country
+              </span>
+
+              <div className="filter-select">
+                <Select
+                  value={countryOptions.find(
+                    (o) => o.value === selectedCountry
+                  )}
+                  onChange={(opt) =>
+                    onCountryChange?.(opt?.value)
+                  }
+                  options={countryOptions}
+                  styles={selectStyles}
+                  isSearchable={false}
+                />
+              </div>
+            </div>
+
+            <div className="filter-group">
+              <span className="filter-label">
+                City
+              </span>
+
+              <div className="filter-select">
+                <Select
+                  value={cityOptions.find(
+                    (o) => o.value === selectedCity
+                  )}
+                  onChange={(opt) =>
+                    onCityChange?.(opt?.value)
+                  }
+                  options={cityOptions}
+                  styles={selectStyles}
+                  isSearchable={false}
+                />
+              </div>
+            </div>
+
+          </div>
+
+          <button
+            className="refresh-btn"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            <RefreshCw
+              size={16}
+              className={
+                loading
+                  ? "refresh-icon spinning"
+                  : "refresh-icon"
+              }
+            />
+          </button>
+
+        </div>
       </div>
     </header>
   );
