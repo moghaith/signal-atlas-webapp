@@ -4,6 +4,7 @@ import { selectStyles } from "../styles/selectStyles";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.heat";
+import 'leaflet/dist/leaflet.css';
 import useDeviceData from "../hooks/useDeviceData";
 import {
   getSupabaseReadingAggregates,
@@ -14,12 +15,31 @@ import "../styles/global.css";
 
 const ALL_REGIONS_ID = "__all__";
 
-const SHARED_HEAT_GRADIENT = {
-  0.0: "#1d4ed8",
-  0.25: "#2563eb",
-  0.5: "#06b6d4",
-  0.75: "#84cc16",
-  1.0: "#facc15",
+const QUALITY_SCALE = [
+  { t: 0.0, label: "No Signal", color: "#1d4ed8" },
+  { t: 0.1, label: "Poor", color: "#2563eb" },
+  { t: 0.25, label: "Fair", color: "#06b6d4" },
+  { t: 0.5, label: "Good", color: "#84cc16" },
+  { t: 0.75, label: "Excellent", color: "#facc15" },
+];
+
+const SHARED_HEAT_GRADIENT = Object.fromEntries(
+  QUALITY_SCALE.filter(s => s.t > 0).map(s => [s.t, s.color])
+);
+
+const heatGradientString = Object.entries(SHARED_HEAT_GRADIENT)
+  .sort(([a], [b]) => Number(a) - Number(b))
+  .map(([t, color], i, arr) => {
+    const percent = Number(t) * 100;
+    return `${color} ${percent}%`;
+  })
+  .join(", ");
+
+const KPI_RANGES = {
+  rsrp: { min: -140, max: -43 },
+  rsrq: { min: -20, max: -3 },
+  rssi: { min: -113, max: -51 },
+  asu:  { min: 0, max: 97 },
 };
 
 function getRegionLabel(point) {
@@ -32,15 +52,65 @@ function getRegionLabel(point) {
   return "Unknown region";
 }
 
-function metricToIntensity(metric, value) {
-  if (value == null || !Number.isFinite(Number(value))) return 0.2;
-  const v = Number(value);
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  const bigint = parseInt(h, 16);
+  return [
+    (bigint >> 16) & 255,
+    (bigint >> 8) & 255,
+    bigint & 255,
+  ];
+}
 
-  if (metric === "rsrq") {
-    return Math.max(0.1, Math.min(1, (v + 20) / 17));
+function computeIntensity(point, metric, densityMap) {
+  if (metric === "density") {
+    return densityMap.get(
+      `${point.latitude.toFixed(4)},${point.longitude.toFixed(4)}`
+    ) ?? 0;
   }
 
-  return Math.max(0.1, Math.min(1, (v + 125) / 45));
+  return normalizeKpi(metric, point?.[metric]);
+}
+function computeDensity(points, bounds) {
+  const filtered = points.filter(p =>
+    bounds.contains([p.latitude, p.longitude])
+  );
+
+  const counts = new Map();
+
+  for (const p of filtered) {
+    const key = `${p.latitude.toFixed(4)},${p.longitude.toFixed(4)}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const max = Math.max(...counts.values(), 1);
+
+  const normalized = new Map();
+  for (const [key, count] of counts.entries()) {
+    normalized.set(key, count / max);
+  }
+
+  return normalized;
+}
+
+function normalizeKpi(metric, value) {
+  if (value == null || !Number.isFinite(Number(value))) return 0.2;
+
+  const v = Number(value);
+  const key = String(metric).toLowerCase();
+
+  const range = KPI_RANGES[key];
+
+  // fallback if unknown metric
+  if (!range) return 0.2;
+
+  const { min, max } = range;
+
+  // normalize to 0–1
+  const normalized = (v - min) / (max - min);
+
+  // clamp + keep visible floor so weak signals still show
+  return Math.max(0.05, Math.min(1, normalized));
 }
 
 function zoomToPrecision(zoom) {
@@ -51,94 +121,212 @@ function zoomToPrecision(zoom) {
   return 6;
 }
 
-function HeatLayer({ points, metric }) {
+function HeatLayer({ points, metric, densityMap }) {
   const map = useMap();
-  const [zoom, setZoom] = useState(() => map?.getZoom?.() ?? 11);
+
+  const [currentZoom, setCurrentZoom] = useState(
+    () => map?.getZoom?.() ?? 11
+  );
+
+  const [viewVersion, setViewVersion] = useState(0);
 
   useEffect(() => {
-    if (!map) return undefined;
+    if (!map) return;
 
-    const onZoomEnd = () => setZoom(map.getZoom());
-    map.on("zoomend", onZoomEnd);
+    const handleViewChange = () => {
+      setCurrentZoom(map.getZoom());
+      setViewVersion(v => v + 1);
+    };
+
+    map.on("zoomend", handleViewChange);
+    map.on("moveend", handleViewChange);
 
     return () => {
-      map.off("zoomend", onZoomEnd);
+      map.off("zoomend", handleViewChange);
+      map.off("moveend", handleViewChange);
     };
   }, [map]);
 
-  useEffect(() => {
-    if (!map || !points.length) return undefined;
+  const GRADIENT = Object.entries(SHARED_HEAT_GRADIENT)
+    .map(([threshold, hex]) => ({
+      threshold: Number(threshold),
+      color: hexToRgb(hex),
+    }))
+    .sort((a, b) => a.threshold - b.threshold);
 
-    const precision = zoomToPrecision(zoom);
+  function interpolateColor(value) {
+    const clamped = Math.max(0, Math.min(1, value));
 
-    const byCoordinate = new Map();
-    for (const point of points) {
-      if (point?.latitude == null || point?.longitude == null) continue;
-      const lat = Number(point.latitude);
-      const lng = Number(point.longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    let lower = GRADIENT[0];
+    let upper = GRADIENT[GRADIENT.length - 1];
 
-      const bucketLat = Number(lat.toFixed(precision));
-      const bucketLng = Number(lng.toFixed(precision));
-      const key = `${bucketLat},${bucketLng}`;
-      const existing = byCoordinate.get(key) || {
-        latSum: 0,
-        lngSum: 0,
-        pointCount: 0,
-        sum: 0,
-        count: 0,
-        density: 0,
-      };
-
-      existing.latSum += lat;
-      existing.lngSum += lng;
-      existing.pointCount += 1;
-      existing.density += 1;
-
-      if (metric !== "density") {
-        const metricValue = Number(point[metric]);
-        if (Number.isFinite(metricValue)) {
-          existing.sum += metricValue;
-          existing.count += 1;
-        }
+    for (let i = 0; i < GRADIENT.length - 1; i++) {
+      if (
+        clamped >= GRADIENT[i].threshold &&
+        clamped <= GRADIENT[i + 1].threshold
+      ) {
+        lower = GRADIENT[i];
+        upper = GRADIENT[i + 1];
+        break;
       }
-
-      byCoordinate.set(key, existing);
     }
 
-    const grouped = Array.from(byCoordinate.values());
-    const maxDensity = grouped.reduce((max, row) => Math.max(max, row.density), 1);
+    const range = upper.threshold - lower.threshold || 1;
+    const t = (clamped - lower.threshold) / range;
 
-    const heatData = grouped.map((entry) => {
-      const avgLat = entry.pointCount > 0 ? entry.latSum / entry.pointCount : null;
-      const avgLng = entry.pointCount > 0 ? entry.lngSum / entry.pointCount : null;
+    return lower.color.map((c, i) =>
+      Math.round(c + (upper.color[i] - c) * t)
+    );
+  }
 
-      if (metric === "density") {
-        const densityIntensity = Math.max(0.1, Math.min(1, entry.density / maxDensity));
-        return [avgLat, avgLng, densityIntensity];
-      }
+  useEffect(() => {
+    if (!map || !points?.length) return;
 
-      const avg = entry.count > 0 ? entry.sum / entry.count : null;
-      return [avgLat, avgLng, metricToIntensity(metric, avg)];
-    });
+    const layer = L.layerGroup();
 
-    const layer = L.heatLayer(heatData, {
-      radius: 28,
-      blur: 20,
-      maxZoom: 17,
-      minOpacity: 0.35,
-      gradient: SHARED_HEAT_GRADIENT,
-    }).addTo(map);
+    // render extra area around viewport
+    const bounds = map.getBounds().pad(0.5);
+
+    const zoomFactor = Math.max(
+      0,
+      Math.min(1, (currentZoom - 10) / 8)
+    );
+
+    const showCore = currentZoom >= 15;
+
+    const processedPoints = points
+      .filter(
+        p =>
+          p?.latitude != null &&
+          p?.longitude != null &&
+          bounds.contains([p.latitude, p.longitude])
+      )
+      .map(point => {
+        const intensity = computeIntensity(point, metric, densityMap);
+
+        return { point, intensity };
+      })
+      .sort((a, b) => a.intensity - b.intensity);
+
+    for (const { point, intensity } of processedPoints) {
+      const [r, g, b] = interpolateColor(intensity);
+
+      const pointSize = Math.min(
+        60,
+        Math.max(8, 8 + (currentZoom - 10) * 4)
+      );
+
+      const blurRadius = Math.min(
+        8,
+        Math.max(2, 2 + (currentZoom - 10))
+      );
+
+      const centerAlpha =
+        0.08 + zoomFactor * 0.18;
+
+      const midAlpha =
+        0.03 + zoomFactor * 0.08;
+
+      const centerDotSize =
+        Math.max(4, 6 + (currentZoom - 15));
+
+      const finalSize =
+        pointSize * (0.9 + intensity * 0.3);
+
+      const icon = L.divIcon({
+        className: "",
+        html: `
+          <div style="
+            position:relative;
+            width:${finalSize}px;
+            height:${finalSize}px;
+            pointer-events:none;
+          ">
+            <div style="
+              position:absolute;
+              inset:0;
+              border-radius:50%;
+              background: radial-gradient(circle,
+                rgba(${r},${g},${b},${centerAlpha}) 0%,
+                rgba(${r},${g},${b},${midAlpha}) 35%,
+                rgba(${r},${g},${b},0.01) 65%,
+                rgba(${r},${g},${b},0) 100%
+              );
+              filter:blur(${blurRadius}px);
+            "></div>
+
+            ${
+              showCore
+                ? `
+                <div style="
+                  position:absolute;
+                  top:50%;
+                  left:50%;
+                  width:${centerDotSize}px;
+                  height:${centerDotSize}px;
+                  transform:translate(-50%, -50%);
+                  border-radius:50%;
+                  background:rgb(${r},${g},${b});
+                  border:1px solid rgba(255,255,255,0.6);
+                "></div>
+              `
+                : ""
+            }
+          </div>
+        `,
+        iconSize: [finalSize, finalSize],
+        iconAnchor: [
+          finalSize / 2,
+          finalSize / 2,
+        ],
+      });
+
+      L.marker(
+        [point.latitude, point.longitude],
+        {
+          icon,
+          interactive: false,
+          keyboard: false,
+        }
+      ).addTo(layer);
+    }
+
+    layer.addTo(map);
 
     return () => {
-      map.removeLayer(layer);
+      layer.remove();
     };
-  }, [map, metric, points, zoom]);
+  }, [
+    map,
+    points,
+    metric,
+    currentZoom,
+    viewVersion,
+  ]);
 
   return null;
 }
 
-function DirectMarkers({ points, onPointClick }) {
+function getQualityFromIntensity(i) {
+  const v = Math.max(0, Math.min(1, i));
+
+  let result = QUALITY_SCALE[0];
+
+  for (const step of QUALITY_SCALE) {
+    if (v >= step.t) {
+      result = step;
+    } else {
+      break;
+    }
+  }
+
+  return {
+    label: result.label,
+    color: result.color,
+  };
+}
+
+function DirectMarkers({ points, onPointClick, heatMetric = "rsrp", densityMap }) {
   const map = useMap();
 
   useEffect(() => {
@@ -147,7 +335,8 @@ function DirectMarkers({ points, onPointClick }) {
     const layer = L.layerGroup();
     for (const point of points) {
       if (point.latitude == null || point.longitude == null) continue;
-      const quality = getQuality(point);
+      const intensity = computeIntensity(point, heatMetric, densityMap);
+      const quality = getQualityFromIntensity(intensity);
 
       const marker = L.circleMarker([point.latitude, point.longitude], {
         radius: 5,
@@ -178,7 +367,7 @@ function DirectMarkers({ points, onPointClick }) {
     return () => {
       map.removeLayer(layer);
     };
-  }, [map, points, onPointClick]);
+  }, [map, points, onPointClick, heatMetric, densityMap]);
 
   return null;
 }
@@ -203,23 +392,43 @@ function AutoFitBounds({ points, enabled }) {
   return null;
 }
 
-function getQuality(point) {
-  if (point?.rsrp == null) return { label: "No data", color: "#94a3b8" };
-  if (point.rsrp >= -90) return { label: "Excellent", color: "#22c55e" };
-  if (point.rsrp >= -100) return { label: "Good", color: "#6b9ae8" };
-  if (point.rsrp >= -110) return { label: "Fair", color: "#f59e0b" };
-  return { label: "Poor", color: "#ef4444" };
+function getQuality(point, metric = "rsrp") {
+  const value = point?.[metric];
+
+  if (value == null || !Number.isFinite(Number(value))) {
+    return { label: "No Signal", color: "#94a3b8" };
+  }
+
+  const v = Number(value);
+  const range = KPI_RANGES[metric];
+
+  if (!range) {
+    return { label: "Unknown", color: "#94a3b8" };
+  }
+
+  const intensity = normalizeKpi(metric, v);
+
+  if (intensity >= 0.75) return { label: "Excellent", color: "#22c55e" };
+  if (intensity >= 0.5)  return { label: "Good", color: "#6b9ae8" };
+  if (intensity >= 0.25) return { label: "Fair", color: "#f59e0b" };
+  if (intensity >= 0.1)  return { label: "Poor", color: "#ef4444" };
+
+  return { label: "No Signal", color: "#94a3b8" };
 }
 
 function ResizeMap({ expanded }) {
   const map = useMap();
 
+  // On mount
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      map.invalidateSize();
-    }, 200);
+    const t = setTimeout(() => map.invalidateSize({ animate: false }), 100);
+    return () => clearTimeout(t);
+  }, [map]);
 
-    return () => clearTimeout(timeout);
+  // On expand toggle
+  useEffect(() => {
+    const t = setTimeout(() => map.invalidateSize({ animate: false }), 250);
+    return () => clearTimeout(t);
   }, [expanded, map]);
 
   return null;
@@ -288,18 +497,48 @@ function MapPage({ deviceData, apiMode }) {
     });
   }, [apiMode]);
 
+  const ALL_REGIONS_ID = "__all__";
+
   const allRegionsEnabled = showAllRegions || selectedRegion === ALL_REGIONS_ID;
 
-  const pointsToRender = allRegionsEnabled
-    ? mapPoints
-    : mapPoints.filter((point) => getRegionLabel(point) === selectedRegion);
+  const filteredMapPoints = useMemo(() => {
+    if (allRegionsEnabled) return mapPoints;
+    return mapPoints.filter(
+      (p) => getRegionLabel(p) === selectedRegion
+    );
+  }, [mapPoints, allRegionsEnabled, selectedRegion]);
 
-  const allReadingPoints = allRegionsEnabled
-    ? heatmapPoints
-    : heatmapPoints.filter((point) => getRegionLabel(point) === selectedRegion);
+  const filteredHeatPoints = useMemo(() => {
+    if (allRegionsEnabled) return heatmapPoints;
+    return heatmapPoints.filter(
+      (p) => getRegionLabel(p) === selectedRegion
+    );
+  }, [heatmapPoints, allRegionsEnabled, selectedRegion]);
 
-  const displayedPoints = showAllReadings ? allReadingPoints : pointsToRender;
-  const crowdsourcedPoints = displayedPoints.filter((point) => !point.is_prediction);
+  const displayedPoints = showAllReadings
+    ? filteredHeatPoints
+    : filteredMapPoints;
+
+  const crowdsourcedPoints = useMemo(
+    () => displayedPoints.filter((p) => !p.is_prediction),
+    [displayedPoints]
+  );
+
+  const densityMap = useMemo(() => {
+    if (heatMetric !== "density") return new Map();
+
+    const validPoints = displayedPoints.filter(
+      p => p.latitude != null && p.longitude != null
+    );
+
+    if (!validPoints.length) return new Map();
+
+    const bounds = L.latLngBounds(
+      validPoints.map(p => [p.latitude, p.longitude])
+    );
+
+    return computeDensity(validPoints, bounds);
+  }, [displayedPoints, heatMetric]);
 
   const predictionPointsForView = useMemo(() => {
     if (dataSourceMode === "crowdsourced") return [];
@@ -323,9 +562,7 @@ function MapPage({ deviceData, apiMode }) {
     return Array.from(coordMap.values());
   }, [predictionPointsForView]);
 
-  const heatPointsForView = useMemo(() => {
-    return displayedPoints;
-  }, [displayedPoints]);
+  const heatPointsForView = displayedPoints;
 
   const dedupedMarkers = useMemo(() => {
     const coordMap = new Map();
@@ -351,14 +588,14 @@ function MapPage({ deviceData, apiMode }) {
       .map((point) => `${point.latitude.toFixed(6)},${point.longitude.toFixed(6)}`)
   ).size;
 
-  const selectedRegionPoint = pointsToRender[0] || null;
+  const selectedRegionPoint = displayedPoints[0] || null;
   const sidePanelPoint = selectedPoint || displayedPoints[0] || selectedRegionPoint || null;
 
   const mapCenter = sidePanelPoint
     ? [sidePanelPoint.latitude, sidePanelPoint.longitude]
     : [30.0444, 31.2357];
 
-  const mapKey = `${showAllRegions}-${selectedRegion}`;
+  const mapKey = `${showAllRegions}-${selectedRegion}-${expanded}`;
 
   const handlePointFocus = useCallback((point, leafletEvent) => {
     setSelectedPoint(point);
@@ -591,18 +828,26 @@ function MapPage({ deviceData, apiMode }) {
                 <AutoFitBounds points={displayedPoints} enabled={showAllRegions} />
 
                 {showHeatView && heatPointsForView.length > 0 && (
-                  <HeatLayer points={heatPointsForView} metric={heatMetric} />
+                  <HeatLayer
+                    points={heatPointsForView}
+                    metric={heatMetric}
+                    densityMap={densityMap}
+                  />
                 )}
 
                 {showAllReadings ? (
                   <DirectMarkers
                     points={crowdsourcedPoints}
                     onPointClick={handlePointFocus}
+                    heatMetric={heatMetric}
+                    densityMap={densityMap}
                   />
                 ) : (
                   <DirectMarkers
                     points={dedupedMarkers}
                     onPointClick={handlePointFocus}
+                    heatMetric={heatMetric}
+                    densityMap={densityMap}
                   />
                 )}
 
@@ -672,16 +917,26 @@ function MapPage({ deviceData, apiMode }) {
         </section>
 
         <section className="map-legend">
-          <span><i style={{ background: "#22c55e" }} /> Excellent</span>
-          <span><i style={{ background: "#6b9ae8" }} /> Good</span>
-          <span><i style={{ background: "#f59e0b" }} /> Fair</span>
-          <span><i style={{ background: "#ef4444" }} /> Poor</span>
-          <span><i style={{ background: "#94a3b8" }} /> No data</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <i style={{ width: 30, background: "linear-gradient(90deg, #1d4ed8 0%, #06b6d4 50%, #facc15 100%)" }} />
-            Heat palette (shared web + android)
-          </span>
-        </section>
+  {QUALITY_SCALE.map((item) => (
+    <span key={item.label}>
+      <i style={{ background: item.color }} />
+      {item.label}
+    </span>
+  ))}
+
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+    <i
+      style={{
+        width: 30,
+        background: `linear-gradient(90deg, ${QUALITY_SCALE
+          .filter(s => s.t > 0) // skip "No Signal"
+          .map(s => `${s.color} ${s.t * 100}%`)
+          .join(", ")})`,
+      }}
+    />
+    Heat palette
+  </span>
+</section>
 
         {globalStats && (
           <section className="map-db-stats">

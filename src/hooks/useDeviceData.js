@@ -10,13 +10,6 @@ import {
   getMobileTrends,
 } from "../data/dataService";
 
-const PREDICTION_SOURCE_NAMES = String(
-  import.meta.env.VITE_PREDICTION_SOURCE_NAMES || import.meta.env.VITE_PREDICTION_DEVICE_ID || "DKL"
-)
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
-
 const ALL_ID = "__all__";
 const EGYPT_BOUNDS = {
   minLat: 21.5,
@@ -39,8 +32,7 @@ const OVERVIEW_FALLBACK = {
 };
 
 function isPredictionSource(source) {
-  if (!source) return false;
-  return PREDICTION_SOURCE_NAMES.includes(String(source).trim());
+  return String(source || "").trim().toLowerCase() === "predicted";
 }
 
 function toNumber(value) {
@@ -159,11 +151,14 @@ function getPredictionConfidence(row) {
 
 function normalizeRow(row, options = {}) {
   const rsrp = toNumber(row?.rsrp);
-  const isPrediction = Boolean(options.isPrediction);
   const city = String(row?.city || "").trim() || "Unknown city";
   const country = String(row?.country || "").trim() || "Unknown country";
+  const isPrediction = options.isPrediction ?? isPredictionSource(row?.source);
+
   return {
     ...row,
+    source: row?.source ?? options.forceSource ?? null,
+    is_prediction: isPrediction,
     device_id: row?.device_id || row?.source || null,
     latitude: toNumber(row?.latitude),
     longitude: toNumber(row?.longitude),
@@ -614,17 +609,18 @@ export default function useDeviceData(apiMode = "device") {
         .filter((row) => row?.latitude != null && row?.longitude != null && row?.timestamp)
         .filter(isEgyptRow);
 
-      const predictionHistory = await Promise.all(
-        PREDICTION_SOURCE_NAMES.map((src) =>
-          loadReadings(src, denseReadingsLimit).catch(() => [])
-        )
-      );
+      const predictionHistory = await Promise.all([
+        loadReadings("predicted", denseReadingsLimit).catch(() => [])
+      ]);
 
       const rawPredictionRows = predictionHistory
         .flat()
-        .map((row) => normalizeRow(row, { isPrediction: true }))
-        .filter((row) => row?.latitude != null && row?.longitude != null && row?.timestamp)
-        .filter(isEgyptRow);
+        .map((row) =>
+          normalizeRow({
+            ...row,
+            source: "predicted",
+          }, { isPrediction: true })
+        )
 
       const periodRegular = filterByPeriod(regularRows, selectedPeriod);
       const periodPredictions = filterByPeriod(rawPredictionRows, selectedPeriod);
@@ -632,8 +628,12 @@ export default function useDeviceData(apiMode = "device") {
         ...periodRegular,
         ...periodPredictions,
       ]);
-      const scopedRegular = periodCombined.filter((row) => !row.is_prediction);
-      const scopedPredictions = periodCombined.filter((row) => row.is_prediction);
+      const scopedRegular = periodCombined.filter(
+        (row) => !isPredictionSource(row.source)
+      );
+      const scopedPredictions = periodCombined.filter(
+        (row) => isPredictionSource(row.source)
+      );
 
       // ── Build country / city options from all rows ──────────────────────────
       let rowsForOptions = scopedRegular;

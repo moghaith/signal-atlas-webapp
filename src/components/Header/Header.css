@@ -7,17 +7,6 @@
   border-bottom: 1px solid #e2e8f0;
 }
 
-.leaflet-container {
-  z-index: 1 !important;
-}
-
-.leaflet-pane,
-.leaflet-top,
-.leaflet-bottom,
-.leaflet-control {
-  z-index: 2 !important;
-}
-
 /* ===================================
    TOP ROW
    =================================== */
@@ -198,7 +187,7 @@
 .filter-row-wrapper {
   max-height: 0;
 
-  overflow: hidden; /* IMPORTANT: restore this */
+  overflow: hidden;
   opacity: 0;
 
   transition:
@@ -223,10 +212,8 @@
 
   background: #f8fafc;
 
-  /* FIX 1: prevent border flicker */
   border-top: 1px solid #f1f5f9;
 
-  /* FIX 2: prevent rendering artifacts */
   transform: translateZ(0);
 
   will-change: max-height, opacity;
@@ -235,7 +222,6 @@
     opacity 0.2s ease;
 }
 
-/* IMPORTANT: avoid border being “half visible” during collapse */
 .filter-row-wrapper:not(.open) .filter-row {
   border-top-color: transparent;
 }

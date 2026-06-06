@@ -5,6 +5,7 @@ import Header from "./components/Header/Header";
 import useDeviceData from "./hooks/useDeviceData";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import './App.css'// index.js
 
 const OverviewPage     = lazy(() => import("./pages/OverviewPage"));
 const MapPage          = lazy(() => import("./pages/MapPage"));
@@ -19,8 +20,17 @@ function AppShell() {
   const apiMode = "supabase";
 
   const deviceData = useDeviceData(apiMode);
-  const { countries, cities, selectedCountry, setSelectedCountry,
-          selectedCity, setSelectedCity, loading, refresh } = deviceData;
+  const { 
+    countries, 
+    cities, 
+    selectedCountry, 
+    setSelectedCountry,
+    selectedCity, 
+    setSelectedCity, 
+
+    loading, 
+    refresh 
+  } = deviceData;
 
   const handleLoginBtn = () => {
     if (profile) {
