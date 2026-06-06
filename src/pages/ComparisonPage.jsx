@@ -28,7 +28,7 @@ function average(values) {
 }
 
 function formatNumber(value, digits = 1) {
-  if (value == null || !Number.isFinite(value)) return "-";
+  if (value == null || !Number.isFinite(value)) return "--";
   return value.toFixed(digits);
 }
 
@@ -112,7 +112,7 @@ function buildFallbackSummary({
   return `For ${regionLabel} over ${selectedPeriod}, predicted data differs from crowdsourced data by ${sampleGap} samples, with ${topOperator} contributing the highest volume. The average RSRP delta (predicted minus crowdsourced) is ${formatNumber(avgRsrpDelta, 2)} dBm and the coverage quality delta is ${formatNumber(coverageDelta, 1)}%. This suggests meaningful model-to-measurement deviation in parts of the region. Prioritize additional real measurements in low-confidence zones, then investigate operators with negative RSRP deltas for optimization opportunities.`;
 }
 
-function ComparisonPage({ deviceData, apiMode }) {
+function PredictionInsightsPage({ deviceData, apiMode }) {
   const {
     regions,
     operators,
@@ -233,9 +233,11 @@ function ComparisonPage({ deviceData, apiMode }) {
 
       <main className="page-content">
         <section className="page-intro">
-          <h2>Comparison</h2>
+          <h2>Prediction Insights</h2>
           <p>
-            Side-by-side analysis of crowdsourced measurements and ML-generated predictions for the selected region.
+            Analyze differences between measured and predicted network performance to
+            uncover trends, validate model outputs, and identify regions that may
+            benefit from additional data collection.
           </p>
         </section>
 
@@ -384,37 +386,68 @@ function ComparisonPage({ deviceData, apiMode }) {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Total samples</td>
-                <td>{crowdsourcedMetrics.samples}</td>
-                <td>{predictedMetrics.samples}</td>
-                <td>{predictedMetrics.samples - crowdsourcedMetrics.samples}</td>
-              </tr>
-              <tr>
-                <td>Unique coordinates</td>
-                <td>{crowdsourcedMetrics.uniqueCoords}</td>
-                <td>{predictedMetrics.uniqueCoords}</td>
-                <td>{predictedMetrics.uniqueCoords - crowdsourcedMetrics.uniqueCoords}</td>
-              </tr>
-              <tr>
-                <td>Average RSRP</td>
-                <td>{formatNumber(crowdsourcedMetrics.avgRsrp, 2)} dBm</td>
-                <td>{formatNumber(predictedMetrics.avgRsrp, 2)} dBm</td>
-                <td>{formatNumber(avgRsrpDelta, 2)} dBm</td>
-              </tr>
-              <tr>
-                <td>Average RSRQ</td>
-                <td>{formatNumber(crowdsourcedMetrics.avgRsrq, 2)} dB</td>
-                <td>{formatNumber(predictedMetrics.avgRsrq, 2)} dB</td>
-                <td>{formatNumber(avgRsrqDelta, 2)} dB</td>
-              </tr>
-              <tr>
-                <td>Coverage (RSRP &gt;= -100)</td>
-                <td>{formatNumber(crowdsourcedMetrics.coveragePct, 1)}%</td>
-                <td>{formatNumber(predictedMetrics.coveragePct, 1)}%</td>
-                <td>{formatNumber(coverageDelta, 1)}%</td>
-              </tr>
-            </tbody>
+            <tr>
+              <td>Total samples</td>
+              <td><span className="values">{crowdsourcedMetrics.samples}</span></td>
+              <td><span className="values">{predictedMetrics.samples}</span></td>
+              <td><span className="values">{predictedMetrics.samples - crowdsourcedMetrics.samples}</span></td>
+            </tr>
+
+            <tr>
+              <td>Unique coordinates</td>
+              <td><span className="values">{crowdsourcedMetrics.uniqueCoords}</span></td>
+              <td><span className="values">{predictedMetrics.uniqueCoords}</span></td>
+              <td><span className="values">{predictedMetrics.uniqueCoords - crowdsourcedMetrics.uniqueCoords}</span></td>
+            </tr>
+
+            <tr>
+              <td>Average RSRP</td>
+              <td>
+                <span className="values">{formatNumber(crowdsourcedMetrics.avgRsrp, 2)}</span>
+                <span className="units"> dBm</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(predictedMetrics.avgRsrp, 2)}</span>
+                <span className="units"> dBm</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(avgRsrpDelta, 2)}</span>
+                <span className="units"> dBm</span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>Average RSRQ</td>
+              <td>
+                <span className="values">{formatNumber(crowdsourcedMetrics.avgRsrq, 2)}</span>
+                <span className="units"> dB</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(predictedMetrics.avgRsrq, 2)}</span>
+                <span className="units"> dB</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(avgRsrqDelta, 2)}</span>
+                <span className="units"> dB</span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>Coverage (RSRP &gt;= -100)</td>
+              <td>
+                <span className="values">{formatNumber(crowdsourcedMetrics.coveragePct, 1)}</span>
+                <span className="units"> %</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(predictedMetrics.coveragePct, 1)}</span>
+                <span className="units"> %</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(coverageDelta, 1)}</span>
+                <span className="units"> %</span>
+              </td>
+            </tr>
+          </tbody>
           </table>
         </section>
 
@@ -441,15 +474,58 @@ function ComparisonPage({ deviceData, apiMode }) {
               <tbody>
                 {operatorBreakdown.map((row) => (
                   <tr key={row.operator}>
-                    <td>{row.operator}</td>
-                    <td>{row.crowd.samples}</td>
-                    <td>{row.pred.samples}</td>
-                    <td>{formatNumber(row.crowd.avgRsrp, 2)} dBm</td>
-                    <td>{formatNumber(row.pred.avgRsrp, 2)} dBm</td>
-                    <td>{formatNumber(row.deltaRsrp, 2)} dBm</td>
-                    <td>{formatNumber(row.crowd.coveragePct, 1)}%</td>
-                    <td>{formatNumber(row.pred.coveragePct, 1)}%</td>
-                    <td>{formatNumber(row.deltaCoverage, 1)}%</td>
+                    <td>
+                      <span className="values">
+                        {row.operator}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {row.crowd.samples}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {row.pred.samples}
+                      </span>
+                      </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.crowd.avgRsrp, 2)}
+                      </span>
+                      <span className="units"> dBm</span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.pred.avgRsrp, 2)} 
+                      </span>
+                      <span className="units"> dBm</span>
+                      
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.deltaRsrp, 2)} 
+                      </span>
+                      <span className="units"> dBm</span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.crowd.coveragePct, 1)}
+                      </span>
+                      <span className="units">%</span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.pred.coveragePct, 1)}
+                      </span>
+                      <span className="units"> %</span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.deltaCoverage, 1)}
+                      </span>
+                      <span className="units"> %</span>
+                    </td>
                   </tr>
                 ))}
                 {operatorBreakdown.length === 0 && (
@@ -466,4 +542,4 @@ function ComparisonPage({ deviceData, apiMode }) {
   );
 }
 
-export default ComparisonPage;
+export default PredictionInsightsPage;

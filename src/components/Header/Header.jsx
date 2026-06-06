@@ -10,6 +10,7 @@ import {
   GitCompare,
   Map,
   BarChart3,
+  TrendingUp,
   RefreshCw,
   MapPin,
   ChevronDown,
@@ -34,9 +35,9 @@ function Header({
 
   const tabs = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
-    { id: "detail", label: "Comparison", icon: GitCompare },
     { id: "map", label: "Map View", icon: Map },
     { id: "regions", label: "Regional Comparison", icon: GitCompare },
+    { id: "predictions", label: "Prediction Insights", icon: TrendingUp  },
     { id: "coverage", label: "Coverage Request", icon: MapPin },
   ];
 
