@@ -36,7 +36,7 @@ function Header({
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "detail", label: "Comparison", icon: GitCompare },
     { id: "map", label: "Map View", icon: Map },
-    { id: "reports", label: "Reports", icon: BarChart3 },
+    { id: "regions", label: "Regional Comparison", icon: GitCompare },
     { id: "coverage", label: "Coverage Request", icon: MapPin },
   ];
 

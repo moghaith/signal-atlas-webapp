@@ -10,7 +10,7 @@ import './App.css'// index.js
 const OverviewPage     = lazy(() => import("./pages/OverviewPage"));
 const MapPage          = lazy(() => import("./pages/MapPage"));
 const ComparisonPage   = lazy(() => import("./pages/ComparisonPage"));
-const ReportsPage      = lazy(() => import("./pages/ReportsPage"));
+const RegionalComparisonPage      = lazy(() => import("./pages/RegionalComparisonPage"));
 const CoverageRequestsPage = lazy(() => import("./pages/coverage/CoverageRequestPage"));
 
 function AppShell() {
@@ -89,7 +89,7 @@ function PageContent({ activePage, deviceData, apiMode, onNavigate, openLoginMod
   switch (activePage) {
     case "detail":   return <ComparisonPage        {...sharedProps} />;
     case "map":      return <MapPage               {...sharedProps} />;
-    case "reports":  return <ReportsPage           {...sharedProps} />;
+    case "regions":  return <RegionalComparisonPage {...sharedProps} />;
     case "coverage": return <CoverageRequestsPage  {...sharedProps} />;
     case "profile":  return <ProfilePage onBack={() => onNavigate("overview") } onLoginClick={openLoginModal}/>;
     default:         return <OverviewPage          {...sharedProps} />;

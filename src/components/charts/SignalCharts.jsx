@@ -49,8 +49,15 @@ export function MeanRsrpTrendChart({ data, period = "all", aggregationLabel = "w
           />
           <YAxis tick={{ fontSize: 11 }} stroke="#cbd5e1" />
           <Tooltip
+            formatter={(value) =>
+              value == null ? "-" : Number(value).toFixed(1)
+            }
             labelFormatter={(value) => new Date(value).toLocaleString()}
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
+            contentStyle={{
+              fontSize: 12,
+              borderRadius: 8,
+              border: "1px solid #e2e8f0",
+            }}
           />
           <Line type="monotone" dataKey="mean_rsrp" stroke="#2563eb" strokeWidth={2} dot={false} name="Mean RSRP" />
         </LineChart>
@@ -73,8 +80,15 @@ export function MeanRsrqTrendChart({ data, period = "all", aggregationLabel = "w
           />
           <YAxis tick={{ fontSize: 11 }} stroke="#cbd5e1" />
           <Tooltip
+            formatter={(value) =>
+              value == null ? "-" : Number(value).toFixed(1)
+            }
             labelFormatter={(value) => new Date(value).toLocaleString()}
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
+            contentStyle={{
+              fontSize: 12,
+              borderRadius: 8,
+              border: "1px solid #e2e8f0",
+            }}
           />
           <Line type="monotone" dataKey="mean_rsrq" stroke="#7c3aed" strokeWidth={2} dot={false} name="Mean RSRQ" />
         </LineChart>
@@ -125,8 +139,10 @@ export function SignalLevelChart({ data }) {
           <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} stroke="#cbd5e1" />
           <YAxis tick={{ fontSize: 11 }} stroke="#cbd5e1" domain={[0, 5]} />
           <Tooltip
-            labelFormatter={(v) => new Date(v).toLocaleString()}
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
+            formatter={(value) =>
+              value == null ? "-" : Number(value).toFixed(0)
+            }
+            labelFormatter={(value) => new Date(value).toLocaleString()}
           />
           <Line type="monotone" dataKey="level" stroke="#9b8ec4" strokeWidth={2} dot={false} name="Level" />
         </LineChart>
@@ -145,8 +161,11 @@ export function DualSignalChart({ data }) {
           <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} stroke="#cbd5e1" />
           <YAxis tick={{ fontSize: 11 }} stroke="#cbd5e1" />
           <Tooltip
-            labelFormatter={(v) => new Date(v).toLocaleString()}
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
+            formatter={(value, name) => [
+              Number(value).toFixed(1),
+              name,
+            ]}
+            labelFormatter={(value) => new Date(value).toLocaleString()}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Line type="monotone" dataKey="rsrp" stroke="#6b9ae8" strokeWidth={2} dot={false} name="RSRP" />
@@ -167,8 +186,15 @@ export function RSRQChart({ data }) {
           <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} stroke="#cbd5e1" />
           <YAxis tick={{ fontSize: 11 }} stroke="#cbd5e1" />
           <Tooltip
-            labelFormatter={(v) => new Date(v).toLocaleString()}
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
+            formatter={(value) =>
+              value == null ? "-" : Number(value).toFixed(1)
+            }
+            labelFormatter={(value) => new Date(value).toLocaleString()}
+            contentStyle={{
+              fontSize: 12,
+              borderRadius: 8,
+              border: "1px solid #e2e8f0",
+            }}
           />
           <ReferenceLine y={-12} stroke="#f59e0b" strokeDasharray="6 3" label={{ value: "Fair", fill: "#f59e0b", fontSize: 11, position: "insideTopLeft" }} />
           <ReferenceLine y={-15} stroke="#ef4444" strokeDasharray="6 3" label={{ value: "Poor", fill: "#ef4444", fontSize: 11, position: "insideTopLeft" }} />
