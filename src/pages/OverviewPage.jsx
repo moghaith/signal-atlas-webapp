@@ -1,7 +1,7 @@
 import Select from "react-select";
 import { selectStyles } from "../styles/selectStyles";
 import StatCard from "../components/StatCard/StatCard";
-import DeviceInfo from "../components/DeviceInfo/DeviceInfo";
+import PredictionInsights from "../components/PredicitonInsightsCard/PredictionInsightsCard";
 import {
   MeanRsrpTrendChart,
   MeanRsrqTrendChart,
@@ -31,6 +31,7 @@ function OverviewPage({ deviceData }) {
     setPredictionConfidenceMin,
     selectedRegionInfo,
     latestReading,
+    predictionPoints,
     readings,
     trendPoints,
     trendAggregationLabel,
@@ -234,7 +235,7 @@ function OverviewPage({ deviceData }) {
             </section>
 
             <section className="two-col-grid">
-              <DeviceInfo reading={latestReading} />
+              <PredictionInsights predictionPoints={predictionPoints} />
               <MeanRsrpTrendChart
                 data={trendPoints}
                 period={selectedPeriod}
