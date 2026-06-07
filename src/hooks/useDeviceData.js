@@ -31,6 +31,46 @@ const OVERVIEW_FALLBACK = {
   total_readings: 0,
 };
 
+// ── Per-metric uncertainty config ──────────────────────────────────────────────
+// max_expected_error: the uncertainty value at which confidence hits ~0
+// These are tuned to your model's expected error range in dB / dBm
+const METRIC_UNCERTAINTY_CONFIG = {
+  rsrp: { max_expected_error: 8 },   // RSRP uncertainty in dBm
+  rsrq: { max_expected_error: 4 },   // RSRQ uncertainty in dB
+};
+
+// Confidence levels for display
+const CONFIDENCE_LEVELS = [
+  { min: 0.85, label: "High",   color: "#22c55e" },
+  { min: 0.65, label: "Medium", color: "#f59e0b" },
+  { min: 0,    label: "Low",    color: "#ef4444" },
+];
+
+function getConfidenceLevel(confidence) {
+  if (confidence == null) return null;
+  return CONFIDENCE_LEVELS.find((l) => confidence >= l.min) || CONFIDENCE_LEVELS[CONFIDENCE_LEVELS.length - 1];
+}
+
+// Compute per-metric confidence from raw uncertainty value
+function computeMetricConfidence(uncertaintyValue, metric) {
+  const config = METRIC_UNCERTAINTY_CONFIG[metric];
+  if (!config) return null;
+  const u = toNumber(uncertaintyValue);
+  if (u == null) return null;
+  // Linear decay: 0 uncertainty → 1.0, max_expected_error → 0.0
+  return Math.max(0, Math.min(1, 1 - u / config.max_expected_error));
+}
+
+// Combined confidence = harmonic mean of available per-metric confidences
+// (harmonic mean punishes low-confidence metrics more than arithmetic mean)
+function computeCombinedConfidence(rsrpConf, rsrqConf) {
+  const valid = [rsrpConf, rsrqConf].filter((v) => v != null);
+  if (!valid.length) return null;
+  if (valid.length === 1) return valid[0];
+  const harmonic = valid.length / valid.reduce((sum, v) => sum + 1 / Math.max(v, 0.001), 0);
+  return Math.max(0, Math.min(1, harmonic));
+}
+
 function isPredictionSource(source) {
   return String(source || "").trim().toLowerCase() === "predicted";
 }
@@ -133,27 +173,18 @@ function assignNearbyUnknownRegions(rows, maxDistanceKm = 25) {
   });
 }
 
-function normalizeConfidence(value) {
-  const num = toNumber(value);
-  if (num == null) return null;
-  if (num > 1 && num <= 100) return Math.max(0, Math.min(1, num / 100));
-  return Math.max(0, Math.min(1, num));
-}
-
-function getPredictionConfidence(row) {
-  return normalizeConfidence(
-    row?.prediction_confidence ??
-      row?.confidence ??
-      row?.confidence_score ??
-      row?.model_confidence
-  );
-}
-
 function normalizeRow(row, options = {}) {
   const rsrp = toNumber(row?.rsrp);
   const city = String(row?.city || "").trim() || "Unknown city";
   const country = String(row?.country || "").trim() || "Unknown country";
   const isPrediction = options.isPrediction ?? isPredictionSource(row?.source);
+
+  // Per-metric uncertainty + confidence
+  const rsrpUncertainty = toNumber(row?.rsrp_uncertainty);
+  const rsrqUncertainty = toNumber(row?.rsrq_uncertainty);
+  const rsrpConfidence = isPrediction ? computeMetricConfidence(rsrpUncertainty, "rsrp") : null;
+  const rsrqConfidence = isPrediction ? computeMetricConfidence(rsrqUncertainty, "rsrq") : null;
+  const combinedConfidence = isPrediction ? computeCombinedConfidence(rsrpConfidence, rsrqConfidence) : null;
 
   return {
     ...row,
@@ -169,13 +200,21 @@ function normalizeRow(row, options = {}) {
     level: row?.level ?? estimateLevelFromRsrp(rsrp),
     city,
     country,
-    // keep a combined label for backward compat with MapPage popups etc.
     region_label: city !== "Unknown city" ? `${city}, ${country}` : country,
     operator: row?.operator || "Unknown operator",
     timestamp: row?.timestamp || row?.created_at || null,
-    is_prediction: isPrediction,
     prediction_source: isPrediction ? row?.source || null : null,
-    prediction_confidence: isPrediction ? getPredictionConfidence(row) : null,
+
+    // Raw uncertainty values
+    rsrp_uncertainty: rsrpUncertainty,
+    rsrq_uncertainty: rsrqUncertainty,
+
+    // Per-metric confidence (0–1)
+    rsrp_confidence: rsrpConfidence,
+    rsrq_confidence: rsrqConfidence,
+
+    // Combined confidence (used for opacity / filtering)
+    prediction_confidence: combinedConfidence,
   };
 }
 
@@ -358,14 +397,11 @@ function filterByPeriod(rows, period) {
   });
 }
 
-// ─── Filter helpers ────────────────────────────────────────────────────────────
-
 function buildCountryOptions(rows) {
   const counts = new Map();
   for (const row of rows) {
-    // Use the already-normalized fields; region_label is always set
-    const country = String(row?.country || "").trim() || 
-                    row.region_label?.split(", ").slice(-1)[0] || 
+    const country = String(row?.country || "").trim() ||
+                    row.region_label?.split(", ").slice(-1)[0] ||
                     "Unknown country";
     counts.set(country, (counts.get(country) || 0) + 1);
   }
@@ -383,7 +419,7 @@ function buildCityOptions(rows, selectedCountry) {
     selectedCountry && selectedCountry !== ALL_ID
       ? rows.filter((row) => {
           const country = String(row?.country || "").trim() ||
-                          row.region_label?.split(", ").slice(-1)[0] || 
+                          row.region_label?.split(", ").slice(-1)[0] ||
                           "Unknown country";
           return country === selectedCountry;
         })
@@ -391,8 +427,8 @@ function buildCityOptions(rows, selectedCountry) {
 
   const counts = new Map();
   for (const row of source) {
-    const city = String(row?.city || "").trim() || 
-                 row.region_label?.split(", ")[0] || 
+    const city = String(row?.city || "").trim() ||
+                 row.region_label?.split(", ")[0] ||
                  "Unknown city";
     counts.set(city, (counts.get(city) || 0) + 1);
   }
@@ -431,24 +467,16 @@ function filterByCity(rows, selectedCity) {
   return rows.filter((row) => resolveCity(row) === selectedCity);
 }
 
-// ─── Hook ──────────────────────────────────────────────────────────────────────
-
 export default function useDeviceData(apiMode = "device") {
   const effectiveApiMode = apiMode === "mobile" ? "supabase" : apiMode;
 
   const [devices, setDevices] = useState([]);
-
-  // Country / city replace the old single "region" selector
   const [countries, setCountries] = useState([]);
   const [cities, setCities] = useState([]);
   const [selectedCountry, setSelectedCountry] = useState(ALL_ID);
   const [selectedCity, setSelectedCity] = useState(ALL_ID);
-
-  // Keep `regions` + `selectedRegion` as derived aliases so existing page
-  // components that still use the old API continue to work unchanged.
   const [regions, setRegions] = useState([]);
   const [selectedRegion, setSelectedRegion] = useState("");
-
   const [operators, setOperators] = useState([]);
   const [networkTypes, setNetworkTypes] = useState([]);
   const [selectedOperator, setSelectedOperator] = useState("all");
@@ -471,7 +499,6 @@ export default function useDeviceData(apiMode = "device") {
   const [readingsError, setReadingsError] = useState(null);
   const [error, setError] = useState(null);
 
-  // When the user picks a country, reset city to ALL
   const handleSetSelectedCountry = useCallback((country) => {
     setSelectedCountry(country);
     setSelectedCity(ALL_ID);
@@ -567,7 +594,6 @@ export default function useDeviceData(apiMode = "device") {
         setCities(mobileCity);
         setSelectedCountry(ALL_ID);
         setSelectedCity(ALL_ID);
-        // legacy aliases
         setRegions([{ id: "Mobile, Data", label: "Mobile, Data" }]);
         setSelectedRegion("Mobile, Data");
         setDevices([]);
@@ -581,8 +607,6 @@ export default function useDeviceData(apiMode = "device") {
         setSelectedPoint(normalizedMap[0] || null);
         return;
       }
-
-      // ── supabase / device mode ──────────────────────────────────────────────
 
       const loadDevices =
         effectiveApiMode === "supabase" ? getSupabaseDeviceSources : getDevicesWithInfo;
@@ -620,7 +644,7 @@ export default function useDeviceData(apiMode = "device") {
             ...row,
             source: "predicted",
           }, { isPrediction: true })
-        )
+        );
 
       const periodRegular = filterByPeriod(regularRows, selectedPeriod);
       const periodPredictions = filterByPeriod(rawPredictionRows, selectedPeriod);
@@ -635,7 +659,6 @@ export default function useDeviceData(apiMode = "device") {
         (row) => isPredictionSource(row.source)
       );
 
-      // ── Build country / city options from all rows ──────────────────────────
       let rowsForOptions = scopedRegular;
       if (dataSourceMode === "predicted") rowsForOptions = scopedPredictions;
       else if (dataSourceMode === "both") rowsForOptions = periodCombined;
@@ -646,10 +669,6 @@ export default function useDeviceData(apiMode = "device") {
       const validCountry = countryOptions.some((c) => c.id === selectedCountry)
         ? selectedCountry
         : countryOptions[0]?.id || ALL_ID;
-      // Don't call the setter — we only update internal derived state here; the
-      // state setter is exposed to the consumer directly.
-      // (selectedCountry will become validCountry on next render cycle; that's
-      // acceptable since refresh() is async.)
 
       const cityOptions = buildCityOptions(rowsForOptions, validCountry);
       setCities(cityOptions);
@@ -658,7 +677,6 @@ export default function useDeviceData(apiMode = "device") {
         ? selectedCity
         : ALL_ID;
 
-      // ── Legacy region aliases (city, country combo) for backward compat ─────
       const regionMap = new Map();
       for (const row of rowsForOptions) {
         const key = row.region_label;
@@ -680,13 +698,11 @@ export default function useDeviceData(apiMode = "device") {
         : regionOptionsWithAll[0]?.id || "";
       setSelectedRegion(validRegion);
 
-      // ── Apply country + city filter ─────────────────────────────────────────
       const applyGeoFilter = (rows) => filterByCity(filterByCountry(rows, validCountry), validCity);
 
       const geoRegular = applyGeoFilter(scopedRegular);
       const geoPredictions = applyGeoFilter(scopedPredictions);
 
-      // ── Network types ────────────────────────────────────────────────────────
       const networkTypeSet = new Set(
         [...geoRegular, ...geoPredictions].map(
           (row) => String(row.network_type || "Unknown network").trim() || "Unknown network"
@@ -717,7 +733,6 @@ export default function useDeviceData(apiMode = "device") {
       const ntRegular = ntFilter(geoRegular);
       const ntPredictions = ntFilter(geoPredictions);
 
-      // ── Operators ────────────────────────────────────────────────────────────
       const operatorSet = new Set(
         [...ntRegular, ...ntPredictions].map((row) => row.operator).filter(Boolean)
       );
@@ -766,7 +781,6 @@ export default function useDeviceData(apiMode = "device") {
             )
           : opPredictionsBase;
 
-      // ── Effective rows based on data source mode ──────────────────────────
       let effectiveRowsAll = opRegularAll;
       if (dataSourceMode === "predicted") effectiveRowsAll = opPredictionsAll;
       else if (dataSourceMode === "both") effectiveRowsAll = [...opRegularAll, ...opPredictionsAll];
@@ -843,20 +857,15 @@ export default function useDeviceData(apiMode = "device") {
 
   return {
     devices,
-
-    // ── New split selectors ──────────────────────────────────────────────────
     countries,
     cities,
     selectedCountry,
     setSelectedCountry: handleSetSelectedCountry,
     selectedCity,
     setSelectedCity,
-
-    // ── Legacy aliases (unchanged API for existing page components) ──────────
     regions,
     selectedRegion,
     setSelectedRegion,
-
     operators,
     networkTypes,
     selectedOperator,
@@ -885,5 +894,9 @@ export default function useDeviceData(apiMode = "device") {
     error,
     readingsError,
     refresh,
+    // Export helpers so MapPage can use them for display
+    getConfidenceLevel,
   };
 }
+
+export { getConfidenceLevel, CONFIDENCE_LEVELS };
