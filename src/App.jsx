@@ -1,6 +1,5 @@
 import { Suspense, lazy, useState } from "react";
 import { useAuth } from "./AuthContext";
-import Mockup from "./Mockup";
 import Header from "./components/Header/Header";
 import useDeviceData from "./hooks/useDeviceData";
 import LoginPage from "./pages/LoginPage";
@@ -99,22 +98,9 @@ function PageContent({ activePage, deviceData, apiMode, onNavigate, openLoginMod
 }
 
 function App() {
-  const [showMockup, setShowMockup] = useState(false);
   return (
     <>
-      <button
-        onClick={() => setShowMockup(!showMockup)}
-        style={{
-          position: "fixed", bottom: 16, right: 16, zIndex: 9999,
-          padding: "8px 16px", borderRadius: 8, border: "none",
-          background: showMockup ? "#6b9ae8" : "#7c6fcd",
-          color: "#fff", fontSize: 13, fontWeight: 600,
-          cursor: "pointer", boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-        }}
-      >
-        {showMockup ? "← Live App" : "View Mockup →"}
-      </button>
-      {showMockup ? <Mockup /> : <AppShell />}
+      <AppShell />
     </>
   );
 }
