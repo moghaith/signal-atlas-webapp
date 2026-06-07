@@ -38,6 +38,7 @@ function Header({
     { id: "map", label: "Map View", icon: Map },
     { id: "regions", label: "Regional Comparison", icon: GitCompare },
     { id: "predictions", label: "Prediction Insights", icon: TrendingUp  },
+    { id: "statistics", label: "Statistics", icon: BarChart3 },
     { id: "coverage", label: "Coverage Request", icon: MapPin },
   ];
 

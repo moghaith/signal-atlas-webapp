@@ -728,52 +728,6 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
             </ResponsiveContainer>
           </div>
         </section>
-
-        {/* ── Histograms ── */}
-        <section className="reports-section-head">
-          <h3>Signal Distribution</h3>
-          <p>Histogram views for RSRP and RSRQ to inspect spread and outliers.</p>
-        </section>
-
-        <section className="reports-two-col">
-          <div className="chart-card">
-            <h3 className="chart-card-title">RSRP Distribution (dBm)</h3>
-            <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={rsrpHistogram} margin={{ top: 8, right: 8, left: -10, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="range" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  cursor={{ fill: "rgba(37,99,235,0.07)" }}
-                />
-                <Bar
-                  dataKey="count"
-                  shape={<RoundedBar fill="#2563eb" stroke="#1d4ed8" />}
-                  isAnimationActive={false}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="chart-card">
-            <h3 className="chart-card-title">RSRQ Distribution (dB)</h3>
-            <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={rsrqHistogram} margin={{ top: 8, right: 8, left: -10, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="range" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  cursor={{ fill: "rgba(124,58,237,0.07)" }}
-                />
-                <Bar
-                  dataKey="count"
-                  shape={<RoundedBar fill="#7c3aed" stroke="#6d28d9" />}
-                  isAnimationActive={false}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
       </main>
     </div>
   );
