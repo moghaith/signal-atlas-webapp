@@ -119,13 +119,11 @@ function PredictionInsightsPage({ deviceData, apiMode }) {
     networkTypes,
     selectedRegion,
     setSelectedRegion,
-    selectedOperator,
     setSelectedOperator,
     selectedNetworkType,
     setSelectedNetworkType,
     selectedPeriod,
     setSelectedPeriod,
-    dataSourceMode,
     setDataSourceMode,
     predictionConfidenceMin,
     setPredictionConfidenceMin,
@@ -140,16 +138,9 @@ function PredictionInsightsPage({ deviceData, apiMode }) {
   const [aiError, setAiError] = useState("");
 
   useEffect(() => {
-    if (dataSourceMode !== "both") {
-      setDataSourceMode("both");
-    }
-  }, [dataSourceMode, setDataSourceMode]);
-
-  useEffect(() => {
-    if (selectedOperator !== "all") {
-      setSelectedOperator("all");
-    }
-  }, [selectedOperator, setSelectedOperator]);
+    setDataSourceMode("both");
+    setSelectedOperator("all");
+  }, [setDataSourceMode, setSelectedOperator]);
 
   const scopedRows = useMemo(() => {
     if (!selectedRegion || selectedRegion === ALL_REGIONS_ID) {

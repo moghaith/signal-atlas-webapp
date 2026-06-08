@@ -1,221 +1,115 @@
-.lp-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(3px);
-  z-index: 2000;
+.login-page {
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #f1f5f9;
   padding: 20px;
 }
 
-.lp-card {
-  background: var(--color-background-primary, #fff);
+.login-card {
+  background: #fff;
   border-radius: 16px;
-  padding: 36px 32px 32px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  padding: 40px;
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.18);
-  position: relative;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 8px;
+}
+
+.login-header p {
+  color: #64748b;
+  margin: 0;
+  font-size: 14px;
+}
+
+.login-form {
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-.lp-header {
+.form-group {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 6px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-group input {
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.form-message {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 13px;
   text-align: center;
 }
 
-.lp-logo {
-  width: 48px;
-  height: 48px;
-
-  border-radius: 10px;
-  object-fit: cover;
-
-  display: block;
-  margin-bottom: 4px;
-
-  /* border: 1px solid #e9dcff; */
-}
-
-.lp-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-text-primary, #0f172a);
-  margin: 0;
-}
-
-.lp-subtitle {
-  font-size: 13px;
-  color: var(--color-text-secondary, #64748b);
-  margin: 0;
-}
-
-.lp-tabs {
-  display: flex;
-  gap: 0;
-  background: var(--color-background-secondary, #f1f5f9);
-  border-radius: 8px;
-  padding: 3px;
-}
-
-.lp-tab {
-  flex: 1;
-  padding: 7px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-secondary, #64748b);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.lp-tab.active {
-  background: var(--color-background-primary, #fff);
-  color: var(--color-text-primary, #0f172a);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
-
-.lp-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.lp-field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.lp-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-secondary, #64748b);
-}
-
-.lp-label-note {
-  font-weight: 400;
-  color: var(--color-text-tertiary, #94a3b8);
-}
-
-.lp-input {
-  padding: 9px 12px;
-  border: 0.5px solid var(--color-border-secondary, #cbd5e1);
-  border-radius: 8px;
-  font-size: 13px;
-  color: var(--color-text-primary, #0f172a);
-  background: var(--color-background-primary, #fff);
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.lp-input:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.lp-error {
-  padding: 9px 12px;
-  background: #fef2f2;
-  border: 0.5px solid #fecaca;
-  border-radius: 8px;
-  font-size: 12px;
-  color: #dc2626;
-}
-
-.lp-submit {
-  padding: 11px;
+.btn-primary {
+  padding: 12px;
   border: none;
   border-radius: 8px;
-  background: #2563eb;
+  background: #6366f1;
   color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-  width: 100%;
-}
-
-.lp-submit:hover:not(:disabled) { background: #1d4ed8; }
-.lp-submit:disabled { opacity: 0.55; cursor: not-allowed; }
-
-.lp-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-text-tertiary, #94a3b8);
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.lp-close:hover {
-  background: var(--color-background-secondary, #f1f5f9);
-  color: var(--color-text-primary, #0f172a);
-}
-
-.lp-password-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.lp-password-wrap .lp-input {
-  padding-right: 70px; /* space for button */
-}
-
-.lp-password-toggle {
-  position: absolute;
-  right: 8px;
-
-  background: transparent;
-  border: none;
-
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
-  color: #64748b;
-
   cursor: pointer;
-
-  padding: 4px 6px;
-  border-radius: 6px;
-
-  transition: 0.15s;
+  transition: background 0.2s;
 }
 
-.lp-switch {
-  display: flex;
-  justify-content: center;
-  margin-top: 6px;
+.btn-primary:hover {
+  background: #4f46e5;
 }
 
-.lp-switch-btn {
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-footer {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.btn-link {
   background: none;
   border: none;
-  font-size: 12px;
-  color: #2563eb;
+  color: #6366f1;
+  font-size: 13px;
   cursor: pointer;
   padding: 4px;
 }
 
-.lp-switch-btn:hover {
+.btn-link:hover {
   text-decoration: underline;
 }
