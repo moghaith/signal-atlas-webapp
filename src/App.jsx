@@ -8,6 +8,8 @@ const OverviewPage = lazy(() => import('./pages/OverviewPage'))
 const MapPage = lazy(() => import('./pages/MapPage'))
 const ComparisonPage = lazy(() => import('./pages/ComparisonPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
+const OperatorComparisonPage = lazy(() => import('./pages/OperatorComparisonPage'))
+const CoverageRequestPage = lazy(() => import('./pages/CoverageRequestPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 
@@ -84,10 +86,26 @@ function AppRoutes() {
           }
         />
         <Route
+          path="/operators"
+          element={
+            <ProtectedRoute>
+              <OperatorComparisonPage {...pageProps} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/profile"
           element={
             <ProtectedRoute>
               <ProfilePage {...pageProps} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/coverage-request"
+          element={
+            <ProtectedRoute>
+              <CoverageRequestPage {...pageProps} />
             </ProtectedRoute>
           }
         />

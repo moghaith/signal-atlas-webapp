@@ -141,8 +141,9 @@ function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
     refresh,
   } = useDeviceData(apiMode);
 
-  const [compareCityA, setCompareCityA] = useState("");
-  const [compareCityB, setCompareCityB] = useState("");
+  const [selectedCities, setSelectedCities] = useState([]);
+
+  const COMPARISON_COLORS = ["#2563eb", "#7c3aed", "#16a34a", "#dc2626", "#ea580c", "#0891b2", "#ca8a04"];
 
   const scopedRows = useMemo(() => {
     if (!selectedRegion || selectedRegion === ALL_REGIONS_ID) return heatmapPoints;
@@ -151,33 +152,55 @@ function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
 
   const cityOptions = useMemo(() => citySummaries.map((city) => city.city_label), [citySummaries]);
 
-  const defaultCityA = compareCityA || cityOptions[0] || "";
-  const defaultCityB = compareCityB || cityOptions[1] || cityOptions[0] || "";
+  const activeCities = useMemo(() => {
+    if (selectedCities.length > 0) return selectedCities;
+    return [cityOptions[0], cityOptions[1]].filter(Boolean);
+  }, [selectedCities, cityOptions]);
 
-  const cityRowsA = useMemo(
-    () => scopedRows.filter((row) => getRegionLabel(row) === defaultCityA),
-    [defaultCityA, scopedRows]
-  );
-  const cityRowsB = useMemo(
-    () => scopedRows.filter((row) => getRegionLabel(row) === defaultCityB),
-    [defaultCityB, scopedRows]
-  );
+  const cityTrends = useMemo(() => {
+    const map = new Map();
+    for (const city of activeCities) {
+      const rows = scopedRows.filter((row) => getRegionLabel(row) === city);
+      map.set(city, aggregateCityTrend(rows, selectedPeriod));
+    }
+    return map;
+  }, [activeCities, scopedRows, selectedPeriod]);
 
-  const trendA = useMemo(() => aggregateCityTrend(cityRowsA, selectedPeriod), [cityRowsA, selectedPeriod]);
-  const trendB = useMemo(() => aggregateCityTrend(cityRowsB, selectedPeriod), [cityRowsB, selectedPeriod]);
+  function mergeMultiTrends(trendMap, field) {
+    const map = new Map();
+    for (const [city, trend] of trendMap) {
+      for (const entry of trend) {
+        const existing = map.get(entry.timestamp) || { timestamp: entry.timestamp };
+        existing[city] = entry[field];
+        map.set(entry.timestamp, existing);
+      }
+    }
+    return Array.from(map.values()).sort((x, y) => new Date(x.timestamp) - new Date(y.timestamp));
+  }
 
   const rsrpComparisonTrend = useMemo(
-    () => mergeTrends(trendA, trendB, "cityA", "cityB", "mean_rsrp"),
-    [trendA, trendB]
+    () => mergeMultiTrends(cityTrends, "mean_rsrp"),
+    [cityTrends]
   );
   const rsrqComparisonTrend = useMemo(
-    () => mergeTrends(trendA, trendB, "cityA", "cityB", "mean_rsrq"),
-    [trendA, trendB]
+    () => mergeMultiTrends(cityTrends, "mean_rsrq"),
+    [cityTrends]
   );
   const coverageComparisonTrend = useMemo(
-    () => mergeTrends(trendA, trendB, "cityA", "cityB", "coverage_quality_percent"),
-    [trendA, trendB]
+    () => mergeMultiTrends(cityTrends, "coverage_quality_percent"),
+    [cityTrends]
   );
+
+  function addCity() {
+    const available = cityOptions.filter((c) => !activeCities.includes(c));
+    if (available.length > 0 && activeCities.length < COMPARISON_COLORS.length) {
+      setSelectedCities([...activeCities, available[0]]);
+    }
+  }
+
+  function removeCity(city) {
+    setSelectedCities(activeCities.filter((c) => c !== city));
+  }
 
   const rsrpHistogram = useMemo(
     () => buildHistogram(scopedRows, "rsrp", -130, -60, 5),
@@ -333,26 +356,40 @@ function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
 
         <section className="reports-section-head">
           <h3>Regional Comparison</h3>
-          <p>Compare trends between any two cities in the currently filtered dataset.</p>
+          <p>Compare trends across multiple cities in the currently filtered dataset.</p>
         </section>
 
         <section className="reports-two-col compact">
-          <div className="comparison-filter">
-            <span>City A</span>
-            <select className="header-device-select" value={defaultCityA} onChange={(e) => setCompareCityA(e.target.value)}>
-              {cityOptions.map((city) => (
-                <option key={`A-${city}`} value={city}>{city}</option>
-              ))}
-            </select>
-          </div>
-          <div className="comparison-filter">
-            <span>City B</span>
-            <select className="header-device-select" value={defaultCityB} onChange={(e) => setCompareCityB(e.target.value)}>
-              {cityOptions.map((city) => (
-                <option key={`B-${city}`} value={city}>{city}</option>
-              ))}
-            </select>
-          </div>
+          {activeCities.map((city, i) => (
+            <div key={city} className="comparison-filter">
+              <span style={{ color: COMPARISON_COLORS[i % COMPARISON_COLORS.length] }}>City {i + 1}</span>
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <select
+                  className="header-device-select"
+                  value={city}
+                  onChange={(e) => {
+                    const next = [...activeCities];
+                    next[i] = e.target.value;
+                    setSelectedCities(next);
+                  }}
+                >
+                  {cityOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                {activeCities.length > 2 && (
+                  <button className="comparison-remove-btn" onClick={() => removeCity(city)} title="Remove city">
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {activeCities.length < COMPARISON_COLORS.length && cityOptions.filter((c) => !activeCities.includes(c)).length > 0 && (
+            <div className="comparison-filter">
+              <button className="btn-add-city" onClick={addCity}>+ Add city</button>
+            </div>
+          )}
         </section>
 
         <section className="reports-three-col">
@@ -365,8 +402,9 @@ function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip labelFormatter={(v) => new Date(v).toLocaleString()} />
                 <Legend />
-                <Line type="monotone" dataKey="cityA" stroke="#2563eb" dot={false} name={defaultCityA || "City A"} />
-                <Line type="monotone" dataKey="cityB" stroke="#7c3aed" dot={false} name={defaultCityB || "City B"} />
+                {activeCities.map((city, i) => (
+                  <Line key={city} type="monotone" dataKey={city} stroke={COMPARISON_COLORS[i % COMPARISON_COLORS.length]} dot={false} name={city} />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -380,8 +418,9 @@ function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip labelFormatter={(v) => new Date(v).toLocaleString()} />
                 <Legend />
-                <Line type="monotone" dataKey="cityA" stroke="#0ea5e9" dot={false} name={defaultCityA || "City A"} />
-                <Line type="monotone" dataKey="cityB" stroke="#9333ea" dot={false} name={defaultCityB || "City B"} />
+                {activeCities.map((city, i) => (
+                  <Line key={city} type="monotone" dataKey={city} stroke={COMPARISON_COLORS[i % COMPARISON_COLORS.length]} dot={false} name={city} />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -395,8 +434,9 @@ function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
                 <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} />
                 <Tooltip labelFormatter={(v) => new Date(v).toLocaleString()} formatter={(v) => `${formatNumber(v, 1)}%`} />
                 <Legend />
-                <Line type="monotone" dataKey="cityA" stroke="#16a34a" dot={false} name={defaultCityA || "City A"} />
-                <Line type="monotone" dataKey="cityB" stroke="#15803d" dot={false} name={defaultCityB || "City B"} />
+                {activeCities.map((city, i) => (
+                  <Line key={city} type="monotone" dataKey={city} stroke={COMPARISON_COLORS[i % COMPARISON_COLORS.length]} dot={false} name={city} />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </div>

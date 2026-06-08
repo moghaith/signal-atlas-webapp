@@ -1,14 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import Header from '../components/Header/Header'
 import './ProfilePage.css'
 
 export default function ProfilePage({ activePage, onNavigate, apiMode, onApiModeChange }) {
-  const { user, profile, signOut, updateProfile } = useAuth()
+  const { user, profile, loading, signOut, updateProfile } = useAuth()
   const [username, setUsername] = useState(profile?.username || '')
   const [displayName, setDisplayName] = useState(profile?.display_name || '')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    setUsername(profile?.username || '')
+    setDisplayName(profile?.display_name || '')
+  }, [profile])
+
+  if (loading) {
+    return (
+      <div className="page">
+        <Header activePage={activePage} onNavigate={onNavigate} apiMode={apiMode} onApiModeChange={onApiModeChange} />
+        <main className="page-content">
+          <div style={{ textAlign: 'center', padding: 48, color: '#64748b' }}>Loading...</div>
+        </main>
+      </div>
+    )
+  }
 
   async function handleSave(e) {
     e.preventDefault()

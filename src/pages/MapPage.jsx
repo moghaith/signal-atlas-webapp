@@ -202,7 +202,7 @@ function AutoFitBounds({ points, enabled }) {
 }
 
 function getQuality(point) {
-  if (point?.rsrp == null) return { label: "No data", color: "#94a3b8" };
+  if (point?.rsrp == null || point.rsrp >= 0) return { label: "No data", color: "#94a3b8" };
   if (point.rsrp >= -90) return { label: "Excellent", color: "#22c55e" };
   if (point.rsrp >= -100) return { label: "Good", color: "#6b9ae8" };
   if (point.rsrp >= -110) return { label: "Fair", color: "#f59e0b" };

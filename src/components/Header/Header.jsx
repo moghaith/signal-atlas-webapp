@@ -24,6 +24,7 @@ function Header({
     "/comparison": "detail",
     "/map": "map",
     "/reports": "reports",
+    "/operators": "operators",
   };
 
   const activePage = activePageProp || pathToTab[location.pathname] || "overview";
@@ -33,6 +34,7 @@ function Header({
     { id: "detail", path: "/comparison", tag: "Page 02", label: "Comparison" },
     { id: "map", path: "/map", tag: "Page 03", label: "Map View" },
     { id: "reports", path: "/reports", tag: "Page 04", label: "Historical Reports" },
+    { id: "operators", path: "/operators", tag: "Page 05", label: "Operators" },
   ];
 
   function handleNavigate(tabId) {
@@ -55,6 +57,9 @@ function Header({
         <div className="header-auth">
           {user ? (
             <div className="header-user-menu">
+              <Link to="/coverage-request" className="header-coverage-link" title="Request coverage">
+                Coverage
+              </Link>
               <Link to="/profile" className="header-user-btn">
                 <span className="header-user-avatar">
                   {profile?.display_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || "?"}

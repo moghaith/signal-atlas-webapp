@@ -71,6 +71,35 @@
   grid-template-columns: 1fr 1fr;
 }
 
+.comparison-remove-btn {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.comparison-remove-btn:hover {
+  background: #fecaca;
+}
+
+.btn-add-city {
+  background: #eef2ff;
+  border: 1px dashed #6366f1;
+  color: #6366f1;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+}
+
+.btn-add-city:hover {
+  background: #e0e7ff;
+}
+
 @media (max-width: 980px) {
   .reports-two-col,
   .reports-two-col.compact {

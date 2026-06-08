@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getDevicesWithInfo,
   getDeviceReadings,
@@ -164,8 +164,13 @@ function getPredictionConfidence(row) {
   );
 }
 
+function signalToNumber(value) {
+  const num = toNumber(value);
+  return num === 0 ? null : num;
+}
+
 function normalizeRow(row, options = {}) {
-  const rsrp = toNumber(row?.rsrp);
+  const rsrp = signalToNumber(row?.rsrp);
   const isPrediction = Boolean(options.isPrediction);
   return {
     ...row,
@@ -173,8 +178,9 @@ function normalizeRow(row, options = {}) {
     latitude: toNumber(row?.latitude),
     longitude: toNumber(row?.longitude),
     rsrp,
-    rsrq: toNumber(row?.rsrq),
-    rssi: toNumber(row?.rssi),
+    rsrq: signalToNumber(row?.rsrq),
+    rssi: signalToNumber(row?.rssi),
+    dbm: signalToNumber(row?.dbm),
     asu: row?.asu ?? estimateAsuFromRsrp(rsrp),
     level: row?.level ?? estimateLevelFromRsrp(rsrp),
     region_label: getRegionLabel(row),
@@ -413,6 +419,20 @@ export default function useDeviceData(apiMode = "device") {
   const [dataSourceMode, setDataSourceMode] = useState("crowdsourced");
   const [predictionConfidenceMin, setPredictionConfidenceMin] = useState(0);
 
+  const regionRef = useRef(selectedRegion);
+  const operatorRef = useRef(selectedOperator);
+  const networkTypeRef = useRef(selectedNetworkType);
+  const periodRef = useRef(selectedPeriod);
+  const dataSourceRef = useRef(dataSourceMode);
+  const confidenceRef = useRef(predictionConfidenceMin);
+
+  regionRef.current = selectedRegion;
+  operatorRef.current = selectedOperator;
+  networkTypeRef.current = selectedNetworkType;
+  periodRef.current = selectedPeriod;
+  dataSourceRef.current = dataSourceMode;
+  confidenceRef.current = predictionConfidenceMin;
+
   const [latestReading, setLatestReading] = useState(null);
   const [readings, setReadings] = useState([]);
   const [trendPoints, setTrendPoints] = useState([]);
@@ -428,6 +448,13 @@ export default function useDeviceData(apiMode = "device") {
   const [error, setError] = useState(null);
 
   const refresh = useCallback(async () => {
+    const curRegion = regionRef.current;
+    const curOperator = operatorRef.current;
+    const curNetworkType = networkTypeRef.current;
+    const curPeriod = periodRef.current;
+    const curDataSource = dataSourceRef.current;
+    const curConfidence = confidenceRef.current;
+
     setLoading(true);
     setError(null);
     setReadingsError(null);
@@ -448,13 +475,13 @@ export default function useDeviceData(apiMode = "device") {
         ];
         setOperators(operatorOptions);
 
-        const validOperator = operatorOptions.some((o) => o.id === selectedOperator)
-          ? selectedOperator
+        const validOperator = operatorOptions.some((o) => o.id === curOperator)
+          ? curOperator
           : "all";
         setSelectedOperator(validOperator);
 
         const mobileFilters = {
-          period: periodMap[selectedPeriod] || "all",
+          period: periodMap[curPeriod] || "all",
           source: "all",
           ...(validOperator !== "all" ? { operator: validOperator } : {}),
         };
@@ -514,7 +541,7 @@ export default function useDeviceData(apiMode = "device") {
 
         setLatestReading(latest);
         setReadings(normalizedReadings);
-        setTrendPoints(aggregateTrendRows(normalizedReadings, selectedPeriod));
+        setTrendPoints(aggregateTrendRows(normalizedReadings, curPeriod));
         setMapPoints(normalizedMap);
         setHeatmapPoints(normalizedMap);
         setPredictionPoints([]);
@@ -553,16 +580,16 @@ export default function useDeviceData(apiMode = "device") {
         .filter((row) => row?.latitude != null && row?.longitude != null && row?.timestamp)
         .filter(isEgyptRow);
 
-      const periodRegular = filterByPeriod(regularRows, selectedPeriod);
-      const periodPredictions = filterByPeriod(rawPredictionRows, selectedPeriod);
+      const periodRegular = filterByPeriod(regularRows, curPeriod);
+      const periodPredictions = filterByPeriod(rawPredictionRows, curPeriod);
       const periodCombined = assignNearbyUnknownRegions([...periodRegular, ...periodPredictions]);
       const scopedRegular = periodCombined.filter((row) => !row.is_prediction);
       const scopedPredictions = periodCombined.filter((row) => row.is_prediction);
 
       let regionSourceRows = periodCombined;
-      if (dataSourceMode === "predicted") {
+      if (curDataSource === "predicted") {
         regionSourceRows = scopedPredictions;
-      } else if (dataSourceMode === "crowdsourced") {
+      } else if (curDataSource === "crowdsourced") {
         regionSourceRows = scopedRegular;
       }
 
@@ -580,8 +607,8 @@ export default function useDeviceData(apiMode = "device") {
         : regionOptions;
       setRegions(regionOptionsWithAll);
 
-      const validRegion = regionOptionsWithAll.some((r) => r.id === selectedRegion)
-        ? selectedRegion
+      const validRegion = regionOptionsWithAll.some((r) => r.id === curRegion)
+        ? curRegion
         : (regionOptionsWithAll[0]?.id || "");
       setSelectedRegion(validRegion);
 
@@ -601,8 +628,8 @@ export default function useDeviceData(apiMode = "device") {
       ];
       setNetworkTypes(networkTypeOptions);
 
-      const validNetworkType = networkTypeOptions.some((o) => o.id === selectedNetworkType)
-        ? selectedNetworkType
+      const validNetworkType = networkTypeOptions.some((o) => o.id === curNetworkType)
+        ? curNetworkType
         : "all";
       setSelectedNetworkType(validNetworkType);
 
@@ -633,8 +660,8 @@ export default function useDeviceData(apiMode = "device") {
       ];
       setOperators(operatorOptions);
 
-      const validOperator = operatorOptions.some((o) => o.id === selectedOperator)
-        ? selectedOperator
+      const validOperator = operatorOptions.some((o) => o.id === curOperator)
+        ? curOperator
         : "all";
       setSelectedOperator(validOperator);
 
@@ -646,9 +673,9 @@ export default function useDeviceData(apiMode = "device") {
         ? networkFilteredPredictionsAll
         : networkFilteredPredictionsAll.filter((row) => row.operator === validOperator);
 
-      const operatorFilteredPredictionsAll = predictionConfidenceMin > 0
+      const operatorFilteredPredictionsAll = curConfidence > 0
         ? operatorFilteredPredictionsBaseAll.filter(
-            (row) => row.prediction_confidence != null && row.prediction_confidence >= predictionConfidenceMin
+            (row) => row.prediction_confidence != null && row.prediction_confidence >= curConfidence
           )
         : operatorFilteredPredictionsBaseAll;
 
@@ -662,10 +689,10 @@ export default function useDeviceData(apiMode = "device") {
 
       let effectiveRowsAll = operatorFilteredRegularAll;
       let effectiveRowsRegion = operatorFilteredRegularRegion;
-      if (dataSourceMode === "predicted") {
+      if (curDataSource === "predicted") {
         effectiveRowsAll = operatorFilteredPredictionsAll;
         effectiveRowsRegion = operatorFilteredPredictionsRegion;
-      } else if (dataSourceMode === "both") {
+      } else if (curDataSource === "both") {
         effectiveRowsAll = [...operatorFilteredRegularAll, ...operatorFilteredPredictionsAll];
         effectiveRowsRegion = [...operatorFilteredRegularRegion, ...operatorFilteredPredictionsRegion];
       }
@@ -689,7 +716,7 @@ export default function useDeviceData(apiMode = "device") {
 
       setLatestReading(latest);
       setReadings(history.slice(-250));
-      setTrendPoints(aggregateTrendRows(history, selectedPeriod));
+      setTrendPoints(aggregateTrendRows(history, curPeriod));
       setOverviewMetrics(computeOverviewMetrics(effectiveRowsRegion));
       setCitySummaries(buildCitySummaries(effectiveRowsAll));
       setSelectedPoint(effectiveMapPoints[0] || latest || null);
@@ -713,11 +740,20 @@ export default function useDeviceData(apiMode = "device") {
     } finally {
       setLoading(false);
     }
-  }, [effectiveApiMode, selectedRegion, selectedOperator, selectedNetworkType, selectedPeriod, dataSourceMode, predictionConfidenceMin]);
+  }, [effectiveApiMode]);
+
+  const mountedRef = useRef(false);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (mountedRef.current) {
+      refresh();
+    }
+    mountedRef.current = true;
+  }, [selectedRegion, selectedOperator, selectedNetworkType, selectedPeriod, dataSourceMode, predictionConfidenceMin]);
 
   const selectedRegionInfo = regions.find((region) => region.id === selectedRegion) || null;
 
