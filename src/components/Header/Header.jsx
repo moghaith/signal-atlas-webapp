@@ -1,32 +1,77 @@
+import { useLocation, useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 import "./Header.css";
 import logo from "../../assets/logo_transparent_with_border.png";
 
 function Header({
-  activePage,
+  activePage: activePageProp,
   onNavigate,
   onRefresh,
   loading,
   regions = [],
   selectedRegion = "",
   onRegionChange,
-  apiMode = "device",
+  apiMode = "supabase",
   onApiModeChange,
 }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, profile, signOut } = useAuth();
+
+  const pathToTab = {
+    "/": "overview",
+    "/overview": "overview",
+    "/comparison": "detail",
+    "/map": "map",
+    "/reports": "reports",
+  };
+
+  const activePage = activePageProp || pathToTab[location.pathname] || "overview";
+
   const tabs = [
-    { id: "overview", tag: "Page 01", label: "Home / Overview" },
-    { id: "detail", tag: "Page 02", label: "Comparison" },
-    { id: "map", tag: "Page 03", label: "Map View" },
-    { id: "reports", tag: "Page 04", label: "Historical Reports" },
+    { id: "overview", path: "/overview", tag: "Page 01", label: "Home / Overview" },
+    { id: "detail", path: "/comparison", tag: "Page 02", label: "Comparison" },
+    { id: "map", path: "/map", tag: "Page 03", label: "Map View" },
+    { id: "reports", path: "/reports", tag: "Page 04", label: "Historical Reports" },
   ];
+
+  function handleNavigate(tabId) {
+    if (onNavigate) {
+      onNavigate(tabId);
+      return;
+    }
+    const tab = tabs.find((t) => t.id === tabId);
+    if (tab) navigate(tab.path);
+  }
 
   return (
     <header className="header-shell">
       <div className="header-top-row">
         <div className="header-logo">
           <img src={logo} alt="Signal Atlas" className="logo-img" />
-          <span className="logo-text">Signal Atlas</span>
+          <Link to="/" className="logo-text" style={{ textDecoration: "none", color: "inherit" }}>Signal Atlas</Link>
         </div>
         <div className="header-badge">4 Pages · REST API Design</div>
+
+        <div className="header-auth">
+          {user ? (
+            <div className="header-user-menu">
+              <Link to="/profile" className="header-user-btn">
+                <span className="header-user-avatar">
+                  {profile?.display_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || "?"}
+                </span>
+                <span className="header-user-name">
+                  {profile?.display_name || user.email?.split("@")[0] || "User"}
+                </span>
+              </Link>
+              <button className="header-logout-btn" onClick={signOut} title="Sign out">
+                Logout
+              </button>
+            </div>
+          ) : (
+            <Link to="/login" className="header-login-btn">Sign In</Link>
+          )}
+        </div>
       </div>
 
       <div className="header-bottom-row">
@@ -36,7 +81,7 @@ function Header({
               key={tab.id}
               type="button"
               className={`nav-link ${activePage === tab.id ? "active" : ""}`}
-              onClick={() => onNavigate?.(tab.id)}
+              onClick={() => handleNavigate(tab.id)}
             >
               <span className="nav-tag">{tab.tag}</span>
               <span>{tab.label}</span>

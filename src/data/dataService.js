@@ -15,9 +15,24 @@ const API_KEY = import.meta.env.VITE_API_KEY || ''
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://lxsnfitbbbfbignmxsdk.supabase.co'
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
-const apiHeaders = {
-  'Content-Type': 'application/json',
-  ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
+function getAuthHeaders() {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
+  }
+  try {
+    const raw = localStorage.getItem('sb-lxsnfitbbbfbignmxsdk-auth-token')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const token = parsed?.access_token
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return headers
 }
 
 const supabaseHeaders = {
@@ -32,7 +47,7 @@ async function apiCall(endpoint, options = {}) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers: {
-      ...apiHeaders,
+      ...getAuthHeaders(),
       ...(options.headers || {}),
     },
   })
