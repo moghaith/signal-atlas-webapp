@@ -133,7 +133,7 @@ export async function getDeviceReadings(deviceId, limit = 50) {
 }
 
 export async function getSupabaseDeviceReadings(deviceId, limit = 50) {
-  const select = 'source,timestamp,latitude,longitude,altitude,level,asu,rsrp,rssi,dbm,rsrq,network_type,operator,cell_id,physical_cell_id,tracking_area_code,country,city,created_at'
+  const select = 'source,timestamp,latitude,longitude,altitude,level,asu,rsrp,rssi,dbm,rsrq,network_type,operator,cell_id,physical_cell_id,tracking_area_code,country,city,created_at,rsrp_uncertainty,rsrq_uncertainty'
   const chunkSize = 1000
   const target = Math.max(1, Number(limit) || 50)
   let offset = 0
@@ -178,6 +178,8 @@ export async function getSupabaseDeviceReadings(deviceId, limit = 50) {
     country: row.country,
     city: row.city,
     created_at: row.created_at,
+    rsrp_uncertainty: row.rsrp_uncertainty,
+    rsrq_uncertainty: row.rsrq_uncertainty,
   }))
 }
 
@@ -520,3 +522,13 @@ export async function getAiDashboardSummary(payload) {
 
   throw lastError || new Error('Gemini request failed for all candidate models')
 }
+
+export {
+  getCoverageRequests,
+  getNearbyCoverageRequests,
+  getCoverageRequest,
+  getCoverageRequestProgress,
+  getCoverageRequestContributions,
+  createCoverageRequest,
+  updateCoverageRequest,
+} from "./coverageRequestService";

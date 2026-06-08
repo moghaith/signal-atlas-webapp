@@ -57,21 +57,20 @@
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .comparison-table {
   width: 100%;
-  border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .comparison-table th,
 .comparison-table td {
-  text-align: left;
-  padding: 12px 14px;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 13px;
-  color: #1e293b;
+  padding: 10px 12px;
+  font-size: 12px;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .comparison-table th {
@@ -152,6 +151,14 @@
 
 .comparison-section-head p {
   font-size: 13px;
+  color: #64748b;
+}
+
+.values {
+  font-weight: 600;
+}
+
+.units {
   color: #64748b;
 }
 

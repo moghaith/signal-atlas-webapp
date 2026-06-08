@@ -1,0 +1,45 @@
+.map-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  
+  position: relative;
+  z-index: 1000;
+}
+
+/* each filter becomes a stable row */
+.map-toggle {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: 10px;
+
+  min-width: 0; /* VERY IMPORTANT */
+}
+
+/* labels never shift */
+.map-toggle span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.map-toggle .css-1s2u09g-control,
+.map-toggle .css-1pahdxg-control {
+  min-width: 0;
+}
+
+.map-toggle > div {
+  min-width: 0;
+  width: 100%;
+}
+
+.map-refresh {
+  grid-column: 1 / -1;   /* take full row */
+  justify-self: end;     /* push to the right */
+}

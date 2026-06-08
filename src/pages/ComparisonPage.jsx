@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import Header from "../components/Header/Header";
+import Select from "react-select";
+import { selectStyles } from "../styles/selectStyles";
 import useDeviceData from "../hooks/useDeviceData";
 import { getAiDashboardSummary } from "../data/dataService";
 import "./ComparisonPage.css";
@@ -27,7 +28,7 @@ function average(values) {
 }
 
 function formatNumber(value, digits = 1) {
-  if (value == null || !Number.isFinite(value)) return "-";
+  if (value == null || !Number.isFinite(value)) return "--";
   return value.toFixed(digits);
 }
 
@@ -111,7 +112,7 @@ function buildFallbackSummary({
   return `For ${regionLabel} over ${selectedPeriod}, predicted data differs from crowdsourced data by ${sampleGap} samples, with ${topOperator} contributing the highest volume. The average RSRP delta (predicted minus crowdsourced) is ${formatNumber(avgRsrpDelta, 2)} dBm and the coverage quality delta is ${formatNumber(coverageDelta, 1)}%. This suggests meaningful model-to-measurement deviation in parts of the region. Prioritize additional real measurements in low-confidence zones, then investigate operators with negative RSRP deltas for optimization opportunities.`;
 }
 
-function ComparisonPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
+function PredictionInsightsPage({ deviceData, apiMode }) {
   const {
     regions,
     operators,
@@ -130,7 +131,7 @@ function ComparisonPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
     loading,
     error,
     refresh,
-  } = useDeviceData(apiMode);
+  } = deviceData;
 
   const [aiSummary, setAiSummary] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -220,89 +221,112 @@ function ComparisonPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
 
   return (
     <div className="page">
-      <Header
-        activePage={activePage}
-        onNavigate={onNavigate}
-        onRefresh={refresh}
-        loading={loading}
-        regions={regions}
-        selectedRegion={selectedRegion}
-        onRegionChange={setSelectedRegion}
-        apiMode={apiMode}
-        onApiModeChange={onApiModeChange}
-      />
 
       <main className="page-content">
         <section className="page-intro">
-          <span className="page-tag">Page 02</span>
-          <h2>Comparison</h2>
+          <h2>Prediction Insights</h2>
           <p>
-            Compare crowdsourced measurements against ML predictions for the currently selected region,
-            operator, period, and confidence threshold.
+            Analyze differences between measured and predicted network performance to
+            uncover trends, validate model outputs, and identify regions that may
+            benefit from additional data collection.
           </p>
         </section>
 
-        <section className="comparison-filters">
-          <div className="comparison-filter">
+        <section className="map-filters">
+
+          {/* Operator */}
+          <div className="map-toggle">
             <span>Operator</span>
-            <select
-              className="header-device-select"
-              value="all"
-              disabled
-            >
-              {operators.map((operator) => (
-                <option key={operator.id} value={operator.id}>{operator.label}</option>
-              ))}
-            </select>
+            <Select
+              value={operators
+                .map((o) => ({ value: o.id, label: o.label }))
+                .find((o) => o.value === selectedOperator)}
+              onChange={(opt) => setSelectedOperator(opt?.value)}
+              options={operators.map((o) => ({
+                value: o.id,
+                label: o.label,
+              }))}
+              isSearchable={false}
+              styles={selectStyles}
+            />
           </div>
 
-          <div className="comparison-filter">
+          {/* Period */}
+          <div className="map-toggle">
             <span>Period</span>
-            <select
-              className="header-device-select"
-              value={selectedPeriod}
-              onChange={(event) => setSelectedPeriod(event.target.value)}
-            >
-              <option value="24h">Last 24h</option>
-              <option value="week">Last week</option>
-              <option value="month">Last month</option>
-              <option value="all">All history</option>
-            </select>
+            <Select
+              value={[
+                { value: "24h", label: "Last 24h" },
+                { value: "week", label: "Last week" },
+                { value: "month", label: "Last month" },
+                { value: "all", label: "All history" },
+              ].find((o) => o.value === selectedPeriod)}
+              onChange={(opt) => setSelectedPeriod(opt?.value)}
+              options={[
+                { value: "24h", label: "Last 24h" },
+                { value: "week", label: "Last week" },
+                { value: "month", label: "Last month" },
+                { value: "all", label: "All history" },
+              ]}
+              isSearchable={false}
+              styles={selectStyles}
+            />
           </div>
 
-          <div className="comparison-filter">
+          {/* Network type */}
+          <div className="map-toggle">
             <span>Network type</span>
-            <select
-              className="header-device-select"
-              value={selectedNetworkType}
-              onChange={(event) => setSelectedNetworkType(event.target.value)}
-            >
-              {networkTypes.map((networkType) => (
-                <option key={networkType.id} value={networkType.id}>{networkType.label}</option>
-              ))}
-            </select>
+            <Select
+              value={networkTypes
+                .map((n) => ({ value: n.id, label: n.label }))
+                .find((o) => o.value === selectedNetworkType)}
+              onChange={(opt) => setSelectedNetworkType(opt?.value)}
+              options={networkTypes.map((n) => ({
+                value: n.id,
+                label: n.label,
+              }))}
+              isSearchable={false}
+              styles={selectStyles}
+            />
           </div>
 
-          <div className="comparison-filter">
+          {/* Data source (disabled but same UI style) */}
+          <div className="map-toggle">
             <span>Data source</span>
-            <select className="header-device-select" value="both" disabled>
-              <option value="both">Both (Crowdsourced + Predicted)</option>
-            </select>
+            <Select
+              value={{ value: "both", label: "Both (Crowdsourced + Predicted)" }}
+              isDisabled
+              styles={selectStyles}
+              options={[
+                { value: "both", label: "Both (Crowdsourced + Predicted)" }
+              ]}
+            />
           </div>
 
-          <div className="comparison-filter">
-            <span>Min prediction confidence</span>
-            <select
-              className="header-device-select"
-              value={String(predictionConfidenceMin)}
-              onChange={(event) => setPredictionConfidenceMin(Number(event.target.value))}
-            >
-              <option value="0">Any</option>
-              <option value="0.5">50%+</option>
-              <option value="0.7">70%+</option>
-              <option value="0.85">85%+</option>
-            </select>
-          </div>
+          {/* Conditional */}
+          {(dataSourceMode === "predicted" || dataSourceMode === "both") && (
+            <div className="map-toggle">
+              <span>Min prediction confidence</span>
+              <Select
+                value={[
+                  { value: 0, label: "Any" },
+                  { value: 0.5, label: "50%+" },
+                  { value: 0.7, label: "70%+" },
+                  { value: 0.85, label: "85%+" },
+                ].find((o) => o.value === predictionConfidenceMin)}
+                onChange={(opt) => setPredictionConfidenceMin(opt?.value)}
+                options={[
+                  { value: 0, label: "Any" },
+                  { value: 0.5, label: "50%+" },
+                  { value: 0.7, label: "70%+" },
+                  { value: 0.85, label: "85%+" },
+                ]}
+                isSearchable={false}
+                styles={selectStyles}
+              />
+            </div>
+          )}
+
         </section>
 
         {error && (
@@ -353,37 +377,68 @@ function ComparisonPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Total samples</td>
-                <td>{crowdsourcedMetrics.samples}</td>
-                <td>{predictedMetrics.samples}</td>
-                <td>{predictedMetrics.samples - crowdsourcedMetrics.samples}</td>
-              </tr>
-              <tr>
-                <td>Unique coordinates</td>
-                <td>{crowdsourcedMetrics.uniqueCoords}</td>
-                <td>{predictedMetrics.uniqueCoords}</td>
-                <td>{predictedMetrics.uniqueCoords - crowdsourcedMetrics.uniqueCoords}</td>
-              </tr>
-              <tr>
-                <td>Average RSRP</td>
-                <td>{formatNumber(crowdsourcedMetrics.avgRsrp, 2)} dBm</td>
-                <td>{formatNumber(predictedMetrics.avgRsrp, 2)} dBm</td>
-                <td>{formatNumber(avgRsrpDelta, 2)} dBm</td>
-              </tr>
-              <tr>
-                <td>Average RSRQ</td>
-                <td>{formatNumber(crowdsourcedMetrics.avgRsrq, 2)} dB</td>
-                <td>{formatNumber(predictedMetrics.avgRsrq, 2)} dB</td>
-                <td>{formatNumber(avgRsrqDelta, 2)} dB</td>
-              </tr>
-              <tr>
-                <td>Coverage (RSRP &gt;= -100)</td>
-                <td>{formatNumber(crowdsourcedMetrics.coveragePct, 1)}%</td>
-                <td>{formatNumber(predictedMetrics.coveragePct, 1)}%</td>
-                <td>{formatNumber(coverageDelta, 1)}%</td>
-              </tr>
-            </tbody>
+            <tr>
+              <td>Total samples</td>
+              <td><span className="values">{crowdsourcedMetrics.samples}</span></td>
+              <td><span className="values">{predictedMetrics.samples}</span></td>
+              <td><span className="values">{predictedMetrics.samples - crowdsourcedMetrics.samples}</span></td>
+            </tr>
+
+            <tr>
+              <td>Unique coordinates</td>
+              <td><span className="values">{crowdsourcedMetrics.uniqueCoords}</span></td>
+              <td><span className="values">{predictedMetrics.uniqueCoords}</span></td>
+              <td><span className="values">{predictedMetrics.uniqueCoords - crowdsourcedMetrics.uniqueCoords}</span></td>
+            </tr>
+
+            <tr>
+              <td>Average RSRP</td>
+              <td>
+                <span className="values">{formatNumber(crowdsourcedMetrics.avgRsrp, 2)}</span>
+                <span className="units"> dBm</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(predictedMetrics.avgRsrp, 2)}</span>
+                <span className="units"> dBm</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(avgRsrpDelta, 2)}</span>
+                <span className="units"> dBm</span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>Average RSRQ</td>
+              <td>
+                <span className="values">{formatNumber(crowdsourcedMetrics.avgRsrq, 2)}</span>
+                <span className="units"> dB</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(predictedMetrics.avgRsrq, 2)}</span>
+                <span className="units"> dB</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(avgRsrqDelta, 2)}</span>
+                <span className="units"> dB</span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>Coverage (RSRP &gt;= -100)</td>
+              <td>
+                <span className="values">{formatNumber(crowdsourcedMetrics.coveragePct, 1)}</span>
+                <span className="units"> %</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(predictedMetrics.coveragePct, 1)}</span>
+                <span className="units"> %</span>
+              </td>
+              <td>
+                <span className="values">{formatNumber(coverageDelta, 1)}</span>
+                <span className="units"> %</span>
+              </td>
+            </tr>
+          </tbody>
           </table>
         </section>
 
@@ -410,15 +465,58 @@ function ComparisonPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
               <tbody>
                 {operatorBreakdown.map((row) => (
                   <tr key={row.operator}>
-                    <td>{row.operator}</td>
-                    <td>{row.crowd.samples}</td>
-                    <td>{row.pred.samples}</td>
-                    <td>{formatNumber(row.crowd.avgRsrp, 2)} dBm</td>
-                    <td>{formatNumber(row.pred.avgRsrp, 2)} dBm</td>
-                    <td>{formatNumber(row.deltaRsrp, 2)} dBm</td>
-                    <td>{formatNumber(row.crowd.coveragePct, 1)}%</td>
-                    <td>{formatNumber(row.pred.coveragePct, 1)}%</td>
-                    <td>{formatNumber(row.deltaCoverage, 1)}%</td>
+                    <td>
+                      <span className="values">
+                        {row.operator}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {row.crowd.samples}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {row.pred.samples}
+                      </span>
+                      </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.crowd.avgRsrp, 2)}
+                      </span>
+                      <span className="units"> dBm</span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.pred.avgRsrp, 2)} 
+                      </span>
+                      <span className="units"> dBm</span>
+                      
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.deltaRsrp, 2)} 
+                      </span>
+                      <span className="units"> dBm</span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.crowd.coveragePct, 1)}
+                      </span>
+                      <span className="units">%</span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.pred.coveragePct, 1)}
+                      </span>
+                      <span className="units"> %</span>
+                    </td>
+                    <td>
+                      <span className="values">
+                        {formatNumber(row.deltaCoverage, 1)}
+                      </span>
+                      <span className="units"> %</span>
+                    </td>
                   </tr>
                 ))}
                 {operatorBreakdown.length === 0 && (
@@ -435,4 +533,4 @@ function ComparisonPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
   );
 }
 
-export default ComparisonPage;
+export default PredictionInsightsPage;
