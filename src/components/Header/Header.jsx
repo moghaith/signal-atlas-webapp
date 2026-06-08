@@ -27,7 +27,7 @@ function Header({
     "/operators": "operators",
   };
 
-  const activePage = activePageProp || pathToTab[location.pathname] || "overview";
+  const activePage = pathToTab[location.pathname] || activePageProp || "overview";
 
   const tabs = [
     { id: "overview", path: "/overview", tag: "Page 01", label: "Home / Overview" },
