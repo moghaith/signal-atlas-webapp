@@ -83,7 +83,13 @@ export function AuthProvider({ children }) {
       signIn,
       signOut,
       updateProfile,
-      refreshProfile: () => user && fetchProfile(user.id),
+      refreshProfile: (updated) => {
+        if (updated) {
+          setProfile(updated);
+        } else if (user) {
+          fetchProfile(user.id);
+        }
+      },
     }}>
       {children}
     </AuthContext.Provider>

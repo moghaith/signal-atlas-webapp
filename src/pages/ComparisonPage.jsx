@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Select from "react-select";
 import { selectStyles } from "../styles/selectStyles";
-import Header from "../components/Header/Header";
 import useDeviceData from "../hooks/useDeviceData";
 import { getAiDashboardSummary } from "../data/dataService";
 import "./ComparisonPage.css";
@@ -113,18 +112,20 @@ function buildFallbackSummary({
   return `For ${regionLabel} over ${selectedPeriod}, predicted data differs from crowdsourced data by ${sampleGap} samples, with ${topOperator} contributing the highest volume. The average RSRP delta (predicted minus crowdsourced) is ${formatNumber(avgRsrpDelta, 2)} dBm and the coverage quality delta is ${formatNumber(coverageDelta, 1)}%. This suggests meaningful model-to-measurement deviation in parts of the region. Prioritize additional real measurements in low-confidence zones, then investigate operators with negative RSRP deltas for optimization opportunities.`;
 }
 
-function PredictionInsightsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
+function PredictionInsightsPage({ deviceData, apiMode }) {
   const {
     regions,
     operators,
     networkTypes,
     selectedRegion,
     setSelectedRegion,
+    selectedOperator,
     setSelectedOperator,
     selectedNetworkType,
     setSelectedNetworkType,
     selectedPeriod,
     setSelectedPeriod,
+    dataSourceMode,
     setDataSourceMode,
     predictionConfidenceMin,
     setPredictionConfidenceMin,
@@ -132,16 +133,23 @@ function PredictionInsightsPage({ activePage, onNavigate, apiMode, onApiModeChan
     loading,
     error,
     refresh,
-  } = useDeviceData(apiMode);
+  } = deviceData;
 
   const [aiSummary, setAiSummary] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
 
   useEffect(() => {
-    setDataSourceMode("both");
-    setSelectedOperator("all");
-  }, [setDataSourceMode, setSelectedOperator]);
+    if (dataSourceMode !== "both") {
+      setDataSourceMode("both");
+    }
+  }, [dataSourceMode, setDataSourceMode]);
+
+  useEffect(() => {
+    if (selectedOperator !== "all") {
+      setSelectedOperator("all");
+    }
+  }, [selectedOperator, setSelectedOperator]);
 
   const scopedRows = useMemo(() => {
     if (!selectedRegion || selectedRegion === ALL_REGIONS_ID) {
@@ -222,17 +230,6 @@ function PredictionInsightsPage({ activePage, onNavigate, apiMode, onApiModeChan
 
   return (
     <div className="page">
-      <Header
-        activePage={activePage}
-        onNavigate={onNavigate}
-        onRefresh={refresh}
-        loading={loading}
-        regions={regions}
-        selectedRegion={selectedRegion}
-        onRegionChange={setSelectedRegion}
-        apiMode={apiMode}
-        onApiModeChange={onApiModeChange}
-      />
 
       <main className="page-content">
         <section className="page-intro">

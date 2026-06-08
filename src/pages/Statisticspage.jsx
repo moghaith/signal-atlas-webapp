@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import Select from "react-select";
 import { selectStyles } from "../styles/selectStyles";
-import "./StatisticsPage.css";
+import "./Statisticspage.css";
 import "../styles/global.css";
 
 const ALL_REGIONS_ID = "__all__";

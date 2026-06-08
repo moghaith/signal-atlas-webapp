@@ -1,93 +1,196 @@
-import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import './LoginPage.css'
+import { useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { Eye, EyeOff } from "lucide-react";
+import logo from "../assets/logo_transparent_with_border.png";
+import "./LoginPage.css";
 
-export default function LoginPage() {
-  const { signIn, signUp, user } = useAuth()
-  const navigate = useNavigate()
-  const [isSignUp, setIsSignUp] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+export default function LoginPage({ onClose, onDone }) {
+  const { signIn, signUp } = useAuth();
 
-  if (user) {
-    return <Navigate to="/" replace />
-  }
+  const [mode, setMode] = useState("login"); // login | register
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError('')
-    setSubmitting(true)
-    try {
-      if (isSignUp) {
-        await signUp(email, password)
-        setError('Check your email for the confirmation link!')
-      } else {
-        await signIn(email, password)
-        navigate('/', { replace: true })
-      }
-    } catch (err) {
-      setError(err.message || 'An error occurred')
-    } finally {
-      setSubmitting(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async () => {
+    if (!email.trim()) {
+      setError("Email is required.");
+      return;
     }
-  }
+
+    if (mode === "register") {
+      if (!password) {
+        setError("Password is required.");
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (mode === "login") {
+        await signIn(email.trim(), password);
+      } else {
+        await signUp(email.trim(), password);
+      }
+
+      onDone?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKey = (e) => {
+    if (e.key === "Enter") handleSubmit();
+  };
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-header">
-          <h1>Signal Atlas</h1>
-          <p>{isSignUp ? 'Create an account' : 'Sign in to your account'}</p>
+    <div className="lp-overlay" onClick={onClose}>
+      <div className="lp-card" onClick={(e) => e.stopPropagation()}>
+
+        {/* HEADER */}
+        <div className="lp-header">
+          <img src={logo} alt="Signal Atlas" className="lp-logo" />
+
+          <h2 className="lp-title">
+            {mode === "login" ? "Welcome back" : "Create account"}
+          </h2>
+
+          <p className="lp-subtitle">
+            {mode === "login"
+              ? "Sign in to continue"
+              : "Join Signal Atlas"}
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
+        {/* FIELDS */}
+        <div className="lp-fields">
+
+          {/* EMAIL */}
+          <div className="lp-field-group">
+            <label className="lp-label">Email</label>
             <input
-              id="email"
-              type="email"
+              className="lp-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              autoComplete="email"
+              onKeyDown={handleKey}
+              placeholder="Enter Email"
+              autoFocus
+              maxLength={100}
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              minLength={6}
-              autoComplete={isSignUp ? 'new-password' : 'current-password'}
-            />
+          {/* PASSWORD */}
+          <div className="lp-field-group">
+            <label className="lp-label">Password</label>
+
+            <div className="lp-password-wrap">
+              <input
+                className="lp-input"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder="Enter Password"
+              />
+
+              <button
+                type="button"
+                className="lp-password-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
-          {error && <div className="form-message">{error}</div>}
+          {/* CONFIRM PASSWORD (REGISTER ONLY) */}
+          {mode === "register" && (
+            <div className="lp-field-group">
+              <label className="lp-label">Confirm Password</label>
 
-          <button type="submit" className="btn-primary" disabled={submitting}>
-            {submitting ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
-          </button>
-        </form>
+              <div className="lp-password-wrap">
+                <input
+                  className="lp-input"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onKeyDown={handleKey}
+                  placeholder="Re-enter Password"
+                />
 
-        <div className="login-footer">
-          <button
-            type="button"
-            className="btn-link"
-            onClick={() => { setIsSignUp(!isSignUp); setError('') }}
-          >
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-          </button>
+                <button
+                  type="button"
+                  className="lp-password-toggle"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
+
+        {/* ERROR */}
+        {error && <div className="lp-error">{error}</div>}
+
+        {/* SUBMIT */}
+        <button
+          className="lp-submit"
+          onClick={handleSubmit}
+          disabled={loading}
+        >
+          {loading
+            ? mode === "login"
+              ? "Signing in..."
+              : "Creating account..."
+            : mode === "login"
+              ? "Sign in"
+              : "Create account"}
+        </button>
+
+        {/* SWITCH MODE */}
+        <div className="lp-switch">
+          {mode === "login" ? (
+            <button
+              type="button"
+              onClick={() => setMode("register")}
+              className="lp-switch-btn"
+            >
+              New here? Create an account
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setMode("login")}
+              className="lp-switch-btn"
+            >
+              Already have an account? Sign in
+            </button>
+          )}
+        </div>
+
+        {/* CLOSE */}
+        <button className="lp-close" onClick={onClose}>
+          ✕
+        </button>
+
       </div>
     </div>
-  )
+  );
 }
