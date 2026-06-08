@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import './LoginPage.css'
 
@@ -13,8 +13,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
 
   if (user) {
-    navigate('/', { replace: true })
-    return null
+    return <Navigate to="/" replace />
   }
 
   async function handleSubmit(e) {

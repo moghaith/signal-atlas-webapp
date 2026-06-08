@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import Header from '../components/Header/Header'
 import './ProfilePage.css'
 
-export default function ProfilePage() {
+export default function ProfilePage({ activePage, onNavigate, apiMode, onApiModeChange }) {
   const { user, profile, signOut, updateProfile } = useAuth()
   const [username, setUsername] = useState(profile?.username || '')
   const [displayName, setDisplayName] = useState(profile?.display_name || '')
@@ -26,7 +26,12 @@ export default function ProfilePage() {
 
   return (
     <div className="page">
-      <Header />
+      <Header
+        activePage={activePage}
+        onNavigate={onNavigate}
+        apiMode={apiMode}
+        onApiModeChange={onApiModeChange}
+      />
       <main className="page-content">
         <section className="page-intro">
           <span className="page-tag">Account</span>

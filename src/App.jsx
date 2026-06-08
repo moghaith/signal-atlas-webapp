@@ -1,5 +1,5 @@
-import { Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { useState, Suspense, lazy } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Mockup from './Mockup'
@@ -11,7 +11,37 @@ const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 
+function NotFound() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#475569', fontSize: 14 }}>
+      <div style={{ textAlign: 'center' }}>
+        <h1 style={{ fontSize: 48, margin: 0, color: '#94a3b8' }}>404</h1>
+        <p>Page not found</p>
+        <a href="/" style={{ color: '#2563eb' }}>Go home</a>
+      </div>
+    </div>
+  )
+}
+
 function AppRoutes() {
+  const [apiMode, setApiMode] = useState('supabase')
+  const [activePage, setActivePage] = useState('overview')
+
+  function handleApiModeChange(mode) {
+    setApiMode(mode)
+  }
+
+  function handleNavigate(page) {
+    setActivePage(page)
+  }
+
+  const pageProps = {
+    activePage,
+    onNavigate: handleNavigate,
+    apiMode,
+    onApiModeChange: handleApiModeChange,
+  }
+
   return (
     <Suspense fallback={
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#475569', fontSize: 14 }}>
@@ -20,19 +50,12 @@ function AppRoutes() {
     }>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <OverviewPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/" element={<Navigate to="/overview" replace />} />
         <Route
           path="/overview"
           element={
             <ProtectedRoute>
-              <OverviewPage />
+              <OverviewPage {...pageProps} />
             </ProtectedRoute>
           }
         />
@@ -40,7 +63,7 @@ function AppRoutes() {
           path="/comparison"
           element={
             <ProtectedRoute>
-              <ComparisonPage />
+              <ComparisonPage {...pageProps} />
             </ProtectedRoute>
           }
         />
@@ -48,7 +71,7 @@ function AppRoutes() {
           path="/map"
           element={
             <ProtectedRoute>
-              <MapPage />
+              <MapPage {...pageProps} />
             </ProtectedRoute>
           }
         />
@@ -56,7 +79,7 @@ function AppRoutes() {
           path="/reports"
           element={
             <ProtectedRoute>
-              <ReportsPage />
+              <ReportsPage {...pageProps} />
             </ProtectedRoute>
           }
         />
@@ -64,11 +87,12 @@ function AppRoutes() {
           path="/profile"
           element={
             <ProtectedRoute>
-              <ProfilePage />
+              <ProfilePage {...pageProps} />
             </ProtectedRoute>
           }
         />
         <Route path="/mockup" element={<Mockup />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
   )

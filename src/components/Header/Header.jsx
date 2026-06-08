@@ -38,7 +38,6 @@ function Header({
   function handleNavigate(tabId) {
     if (onNavigate) {
       onNavigate(tabId);
-      return;
     }
     const tab = tabs.find((t) => t.id === tabId);
     if (tab) navigate(tab.path);
