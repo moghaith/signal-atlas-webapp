@@ -5,13 +5,7 @@ import {
   Edit3, Check, X
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import {
-  getWalletDetails,
-  getWalletTransactions,
-  getUserSamplesCount,
-  deleteUserSamples,
-  updateProfile,
-} from "../data/profileService";
+import { supabase } from "../lib/supabase";
 import "./ProfilePage.css";
 
 const TX_PAGE_SIZE = 20;
@@ -43,13 +37,14 @@ function Dialog({ onBackdropClick, icon, iconColor = "#dc2626", title, children 
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function ProfilePage( {onLoginClick } ) {
-  const { profile, signOut, refreshProfile } = useAuth();
+  const { profile, signOut, refreshProfile, updateProfile: updateAuthProfile } = useAuth();
 
   const [wallet,       setWallet]       = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [txPage,       setTxPage]       = useState(0);
   const [txLoading,    setTxLoading]    = useState(true);
 
+  const [devices,        setDevices]        = useState([]);
   const [deviceSamples,  setDeviceSamples]  = useState({});
   const [samplesLoading, setSamplesLoading] = useState(true);
 
@@ -74,22 +69,27 @@ export default function ProfilePage( {onLoginClick } ) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!profile) return;
+    if (!profile?.id) return;
     setTxLoading(true);
-    Promise.all([
-      getWalletDetails(profile.id),
-      getWalletTransactions(profile.id, 500),
-    ])
-      .then(([w, txData]) => {
-        setWallet(w);
-        setTransactions(txData?.transactions || []);
+
+    supabase
+      .from("wallet_transactions")
+      .select("*")
+      .eq("user_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(500)
+      .then(({ data, error }) => {
+        if (!error && data) setTransactions(data);
       })
-      .catch((err) => setError(err.message))
       .finally(() => setTxLoading(false));
+
+    setWallet({ credits: profile.credits ?? 0 });
   }, [profile]);
 
   useEffect(() => {
-    loadDeviceSamples();
+    if (!profile?.id) return;
+    loadDevices();
+    loadDeviceSamples([]);
   }, [profile]);
 
   useEffect(() => {
@@ -98,32 +98,47 @@ export default function ProfilePage( {onLoginClick } ) {
     }
   }, [profile]);
 
-  const loadDeviceSamples = async () => {
-    if (!profile?.device_ids?.length) {
+  const loadDevices = async () => {
+    const { data } = await supabase
+      .from("user_devices")
+      .select("device_id")
+      .eq("user_id", profile.id);
+
+    const deviceList = data?.map((d) => d.device_id) || [];
+    setDevices(deviceList);
+    loadDeviceSamples(deviceList);
+  };
+
+  const loadDeviceSamples = async (deviceIds) => {
+    if (!deviceIds?.length) {
       setDeviceSamples({});
+      setSamplesLoading(false);
       return;
     }
 
     setSamplesLoading(true);
 
-    try {
-      const results = await Promise.all(
-        profile.device_ids.map((did) =>
-          getUserSamplesCount(did)
-            .then((r) => ({ did, count: r?.total_samples_count ?? 0 }))
-            .catch(() => ({ did, count: "—" }))
-        )
-      );
+    const results = await Promise.all(
+      deviceIds.map(async (did) => {
+        try {
+          const { count } = await supabase
+            .from("device_readings")
+            .select("*", { count: "exact", head: true })
+            .eq("source", did);
+          return { did, count: count ?? 0 };
+        } catch {
+          return { did, count: "—" };
+        }
+      })
+    );
 
-      const map = {};
-      results.forEach(({ did, count }) => {
-        map[did] = count;
-      });
+    const map = {};
+    results.forEach(({ did, count }) => {
+      map[did] = count;
+    });
 
-      setDeviceSamples(map);
-    } finally {
-      setSamplesLoading(false);
-    }
+    setDeviceSamples(map);
+    setSamplesLoading(false);
   };
 
   const handleDeleteSamples = async () => {
@@ -133,12 +148,15 @@ export default function ProfilePage( {onLoginClick } ) {
     setDeleteError(null);
 
     try {
-      await deleteUserSamples(deleteTarget);
+      const { error } = await supabase
+        .from("device_readings")
+        .delete()
+        .eq("source", deleteTarget);
+
+      if (error) throw error;
 
       setDeleteTarget(null);
-
-      await loadDeviceSamples();
-
+      loadDeviceSamples(devices);
     } catch (err) {
       setDeleteError(err.message);
     } finally {
@@ -172,12 +190,11 @@ export default function ProfilePage( {onLoginClick } ) {
     setUsernameError(null);
 
     try {
-      const updatedProfile = await updateProfile(profile.id, {
+      const updated = await updateAuthProfile({
         username: newUsername.trim(),
       });
 
-      // update global auth state
-      refreshProfile(updatedProfile);
+      refreshProfile(updated);
 
       setEditingUsername(false);
     } catch (err) {
@@ -212,7 +229,7 @@ export default function ProfilePage( {onLoginClick } ) {
 
   const txTotalPages = Math.ceil(transactions.length / TX_PAGE_SIZE);
   const txSlice = transactions.slice(txPage * TX_PAGE_SIZE, (txPage + 1) * TX_PAGE_SIZE);
-  const availableBalance = wallet ? Number(wallet.credits) : 0;
+  const availableBalance = Number(wallet?.credits ?? profile?.credits ?? 0);
 
   return (
     <main className="page-content pp-page">
@@ -343,7 +360,7 @@ export default function ProfilePage( {onLoginClick } ) {
         <div className="pp-section-head">
           <Wallet size={15} />
           <h3>Transaction History</h3>
-          {wallet && <span className="pp-section-count">{wallet.transaction_count} total</span>}
+          {transactions.length > 0 && <span className="pp-section-count">{transactions.length} total</span>}
         </div>
 
         {txLoading ? (
@@ -404,10 +421,10 @@ export default function ProfilePage( {onLoginClick } ) {
         <div className="pp-section-head">
           <Monitor size={15} />
           <h3>Registered Devices</h3>
-          <span className="pp-section-count">{profile.device_ids?.length || 0} devices</span>
+          <span className="pp-section-count">{devices.length} devices</span>
         </div>
 
-        {!profile.device_ids?.length ? (
+        {!devices.length ? (
           <div className="pp-empty-state">
             <Monitor size={28} className="pp-empty-icon" />
             <p>No devices registered to this account.</p>
@@ -419,7 +436,7 @@ export default function ProfilePage( {onLoginClick } ) {
               <span>Total samples</span>
               <span></span>
             </div>
-            {profile.device_ids.map((did) => (
+            {devices.map((did) => (
               <div key={did} className="pp-device-row">
                 <span className="pp-device-id">{did}</span>
                 <span className="pp-device-samples">
