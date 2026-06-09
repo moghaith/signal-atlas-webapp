@@ -31,44 +31,51 @@ const OVERVIEW_FALLBACK = {
   total_readings: 0,
 };
 
-// ── Per-metric uncertainty config ──────────────────────────────────────────────
-// max_expected_error: the uncertainty value at which confidence hits ~0
-// These are tuned to your model's expected error range in dB / dBm
-const METRIC_UNCERTAINTY_CONFIG = {
-  rsrp: { max_expected_error: 8 },   // RSRP uncertainty in dBm
-  rsrq: { max_expected_error: 4 },   // RSRQ uncertainty in dB
-};
-
-// Confidence levels for display
-const CONFIDENCE_LEVELS = [
+// ── Confidence levels for display ─────────────────────────────────────────────
+export const CONFIDENCE_LEVELS = [
   { min: 0.85, label: "High",   color: "#22c55e" },
   { min: 0.65, label: "Medium", color: "#f59e0b" },
   { min: 0,    label: "Low",    color: "#ef4444" },
 ];
 
-function getConfidenceLevel(confidence) {
+export function getConfidenceLevel(confidence) {
   if (confidence == null) return null;
   return CONFIDENCE_LEVELS.find((l) => confidence >= l.min) || CONFIDENCE_LEVELS[CONFIDENCE_LEVELS.length - 1];
 }
 
-// Compute per-metric confidence from raw uncertainty value
-function computeMetricConfidence(uncertaintyValue, metric) {
-  const config = METRIC_UNCERTAINTY_CONFIG[metric];
-  if (!config) return null;
-  const u = toNumber(uncertaintyValue);
-  if (u == null) return null;
-  // Linear decay: 0 uncertainty → 1.0, max_expected_error → 0.0
-  return Math.max(0, Math.min(1, 1 - u / config.max_expected_error));
-}
-
-// Combined confidence = harmonic mean of available per-metric confidences
-// (harmonic mean punishes low-confidence metrics more than arithmetic mean)
+// Combined confidence = harmonic mean (punishes weak metrics more than arithmetic)
 function computeCombinedConfidence(rsrpConf, rsrqConf) {
   const valid = [rsrpConf, rsrqConf].filter((v) => v != null);
   if (!valid.length) return null;
   if (valid.length === 1) return valid[0];
   const harmonic = valid.length / valid.reduce((sum, v) => sum + 1 / Math.max(v, 0.001), 0);
   return Math.max(0, Math.min(1, harmonic));
+}
+
+// Min-max normalize a single uncertainty value given the dataset bounds
+// Matches Python: confidence = 1 - (u - min) / (max - min)
+function minMaxConfidence(u, min, max) {
+  if (u == null || !Number.isFinite(u)) return null;
+  if (max <= min) return 1; // no variance in dataset → all equally certain
+  return Math.max(0, Math.min(1, 1 - (u - min) / (max - min)));
+}
+
+// Compute min/max bounds from a batch of prediction rows
+function computeUncertaintyBounds(predictionRows) {
+  let rsrpMin = Infinity, rsrpMax = -Infinity;
+  let rsrqMin = Infinity, rsrqMax = -Infinity;
+
+  for (const row of predictionRows) {
+    const ru = toNumber(row?.rsrp_uncertainty);
+    const qu = toNumber(row?.rsrq_uncertainty);
+    if (ru != null) { if (ru < rsrpMin) rsrpMin = ru; if (ru > rsrpMax) rsrpMax = ru; }
+    if (qu != null) { if (qu < rsrqMin) rsrqMin = qu; if (qu > rsrqMax) rsrqMax = qu; }
+  }
+
+  return {
+    rsrp: { min: isFinite(rsrpMin) ? rsrpMin : 0, max: isFinite(rsrpMax) ? rsrpMax : 0 },
+    rsrq: { min: isFinite(rsrqMin) ? rsrqMin : 0, max: isFinite(rsrqMax) ? rsrqMax : 0 },
+  };
 }
 
 function isPredictionSource(source) {
@@ -179,12 +186,20 @@ function normalizeRow(row, options = {}) {
   const country = String(row?.country || "").trim() || "Unknown country";
   const isPrediction = options.isPrediction ?? isPredictionSource(row?.source);
 
-  // Per-metric uncertainty + confidence
   const rsrpUncertainty = toNumber(row?.rsrp_uncertainty);
   const rsrqUncertainty = toNumber(row?.rsrq_uncertainty);
-  const rsrpConfidence = isPrediction ? computeMetricConfidence(rsrpUncertainty, "rsrp") : null;
-  const rsrqConfidence = isPrediction ? computeMetricConfidence(rsrqUncertainty, "rsrq") : null;
-  const combinedConfidence = isPrediction ? computeCombinedConfidence(rsrpConfidence, rsrqConfidence) : null;
+
+  // Bounds passed in from the batch — null for non-predictions
+  const bounds = options.uncertaintyBounds ?? null;
+  const rsrpConfidence = (isPrediction && bounds)
+    ? minMaxConfidence(rsrpUncertainty, bounds.rsrp.min, bounds.rsrp.max)
+    : null;
+  const rsrqConfidence = (isPrediction && bounds)
+    ? minMaxConfidence(rsrqUncertainty, bounds.rsrq.min, bounds.rsrq.max)
+    : null;
+  const combinedConfidence = isPrediction
+    ? computeCombinedConfidence(rsrpConfidence, rsrqConfidence)
+    : null;
 
   return {
     ...row,
@@ -204,16 +219,10 @@ function normalizeRow(row, options = {}) {
     operator: row?.operator || "Unknown operator",
     timestamp: row?.timestamp || row?.created_at || null,
     prediction_source: isPrediction ? row?.source || null : null,
-
-    // Raw uncertainty values
     rsrp_uncertainty: rsrpUncertainty,
     rsrq_uncertainty: rsrqUncertainty,
-
-    // Per-metric confidence (0–1)
     rsrp_confidence: rsrpConfidence,
     rsrq_confidence: rsrqConfidence,
-
-    // Combined confidence (used for opacity / filtering)
     prediction_confidence: combinedConfidence,
   };
 }
@@ -637,14 +646,23 @@ export default function useDeviceData(apiMode = "device") {
         loadReadings("predicted", denseReadingsLimit).catch(() => [])
       ]);
 
-      const rawPredictionRows = predictionHistory
-        .flat()
-        .map((row) =>
-          normalizeRow({
+      // Compute dataset-wide uncertainty bounds first
+      const rawPredRows = predictionHistory.flat();
+
+      const uncertaintyBounds = computeUncertaintyBounds(rawPredRows);
+
+      const rawPredictionRows = rawPredRows.map((row) =>
+        normalizeRow(
+          {
             ...row,
             source: "predicted",
-          }, { isPrediction: true })
-        );
+          },
+          {
+            isPrediction: true,
+            uncertaintyBounds,
+          }
+        )
+      );
 
       const periodRegular = filterByPeriod(regularRows, selectedPeriod);
       const periodPredictions = filterByPeriod(rawPredictionRows, selectedPeriod);
@@ -898,5 +916,3 @@ export default function useDeviceData(apiMode = "device") {
     getConfidenceLevel,
   };
 }
-
-export { getConfidenceLevel, CONFIDENCE_LEVELS };
