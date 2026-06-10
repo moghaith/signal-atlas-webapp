@@ -1,7 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://sa.agentraeg.com'
 const API_KEY = import.meta.env.VITE_API_KEY || ''
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://lxsnfitbbbfbignmxsdk.supabase.co'
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
 
 const apiHeaders = {
@@ -20,14 +18,40 @@ async function coverageApiCall(endpoint, options = {}) {
   if (!response.ok) {
     let detail = "";
     try {
-      const body = await response.json();
-      detail = body?.detail || body?.message || "";
+      const raw = await response.text();
+      let body = raw;
+      try {
+        body = raw ? JSON.parse(raw) : "";
+      } catch {
+        body = raw;
+      }
+
+      if (Array.isArray(body)) {
+        // Top-level array of validation errors
+        detail = body
+          .map((it) => it?.msg || it?.message || it?.detail || JSON.stringify(it))
+          .join("; ");
+      } else if (body && typeof body === "object") {
+        const d = body.detail ?? body.message;
+        if (Array.isArray(d)) {
+          // FastAPI: { detail: [{ loc, msg, type }] }
+          detail = d
+            .map((it) => {
+              const loc = Array.isArray(it?.loc) ? it.loc.join(" → ") : "";
+              const msg = it?.msg || JSON.stringify(it);
+              return loc ? `${loc}: ${msg}` : msg;
+            })
+            .join("; ");
+        } else {
+          detail = d || JSON.stringify(body);
+        }
+      } else {
+        detail = String(body || "");
+      }
     } catch {
-      /* ignore */
+      detail = response.statusText;
     }
-    throw new Error(
-      `API ${response.status}: ${detail || response.statusText} (${endpoint})`
-    );
+    throw new Error(`API ${response.status}: ${detail || response.statusText} (${endpoint})`);
   }
   return response.json();
 }
@@ -96,7 +120,7 @@ export async function getCoverageRequestContributions(requestId) {
 // }
 
 export async function createCoverageRequest(payload) {
-    console.log(`${API_BASE_URL}/coverage-requests`);
+    console.log(`${API_BASE_URL}/coverage-requests`, payload);
   return coverageApiCall("/coverage-requests", {
     method: "POST",
     body: JSON.stringify(payload),

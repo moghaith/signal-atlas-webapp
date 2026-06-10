@@ -3,7 +3,9 @@ import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./CoverageRequests.css";
+import { useAuth } from "../../contexts/AuthContext";
 import { createCoverageRequest, getPolygonDensityScore } from "../../data/coverageRequestService";
+import { supabase } from "../../lib/supabase";
 import {
   HiOutlineMap,
   HiOutlineSignal,
@@ -273,6 +275,7 @@ const INITIAL_POLYGON = { points: [], closed: false };
 const MAP_CENTER = [26.8206, 30.8025]; // Egypt center
 
 export default function CreateView({ onBack, onCreated, deviceData }) {
+  const { user, profile } = useAuth();
   const [mapMode, setMapMode] = useState("pan"); // "pan" | "draw" | "edit"
   const [polygon, setPolygon] = useState(INITIAL_POLYGON);
   const [editIndex, setEditIndex] = useState(null);
@@ -294,6 +297,8 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [creditBalance, setCreditBalance] = useState(null);
+  const [creditLoading, setCreditLoading] = useState(false);
 
   const areaKm2 = polygon.closed && polygon.points.length >= 3
     ? polygonAreaKm2(polygon.points).toFixed(2)
@@ -339,10 +344,57 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
     // (This is a best-effort hint; user can override)
   }, [centroid, deviceData]);
 
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      created_by: user?.email || "",
+    }));
+  }, [user?.email]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setCreditBalance(null);
+      setCreditLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setCreditLoading(true);
+
+    supabase
+      .from("profiles")
+      .select("credits")
+      .eq("id", user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) throw error;
+        setCreditBalance(Number(data?.credits ?? 0));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCreditBalance(Number(profile?.credits ?? 0));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCreditLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.credits, user?.id]);
+
   const targetDensity = Number(form.target_density_score);
   const currentDensity = densityScore?.density_score ?? 0;
+  const availableCredits = Number(creditBalance ?? profile?.credits ?? 0);
+  const rewardAmount = Number(form.reward_amount);
+  const rewardTooHigh =
+    Number.isFinite(rewardAmount) && rewardAmount > 0 && rewardAmount > availableCredits;
+  const isSignedIn = Boolean(user?.id);
 
   const canSubmit =
+    isSignedIn &&
     polygon.closed &&
     polygon.points.length >= 3 &&
     form.title.trim() &&
@@ -350,32 +402,54 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
     targetDensity > 0 &&
     targetDensity > currentDensity &&
     form.reward_amount &&
-    Number(form.reward_amount) > 0 &&
-    !densityLoading;
+    rewardAmount > 0 &&
+    !rewardTooHigh &&
+    !densityLoading &&
+    !creditLoading;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const { data: latestProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("credits")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      const latestCredits = Number(latestProfile?.credits ?? 0);
+      const requestedReward = Number(form.reward_amount);
+
+      if (requestedReward > latestCredits) {
+        throw new Error(
+          `Reward cannot exceed your available balance of ${latestCredits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP.`
+        );
+      }
+
       const result = await createCoverageRequest({
         title:                form.title.trim(),
         description:          form.description.trim() || null,
-        created_by:           form.created_by.trim(),
-        country:              form.country.trim() || null,
-        city:                 form.city.trim() || null,
+        created_by:           user.email,
+        created_by_id:        user.id || null,
+        ...(form.country.trim() ? { country: form.country.trim() } : {}),
+        ...(form.city.trim()    ? { city:    form.city.trim()    } : {}),
         area:                 latlngsToGeoJsonPolygon(polygon.points),
         target_density_score: Number(form.target_density_score),
-        reward_amount:        Number(form.reward_amount),
+        reward_amount:        requestedReward,
       });
       // onCreated(result.id); // navigate straight to detail
       const newId = result?.request_id;
       if (!newId) {
         console.error("createCoverageRequest response:", result);
+        setSubmitError("Request created but response did not include request_id.");
         setSubmitting(false);
         return;
       }
 
+      setSubmitting(false);
       onCreated(newId);
     } catch (err) {
       setSubmitError(err.message || "Failed to create coverage request.");
@@ -394,7 +468,7 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
                 <div className="cr-success">
                 <div className="cr-success-icon">✓</div>
                 <h2>Coverage request created</h2>
-                <p>Your request has been submitted and is now open for contributors.</p>
+          <p>Your request has been submitted. Credits will be deducted after approval.</p>
                 <button
                     className="cr-btn cr-btn-primary"
                     onClick={() => {
@@ -585,9 +659,9 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
                 id="cr-created-by"
                 className="cr-input"
                 name="created_by"
-                value={form.created_by}
-                onChange={handleFieldChange}
-                placeholder="Username or team name"
+              value={form.created_by || (user?.email ?? "")}
+              readOnly
+              placeholder="Signed-in account"
                 maxLength={100}
                 />
             </div>
@@ -666,6 +740,14 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
                 onChange={handleFieldChange}
                 placeholder="e.g. 500.00"
                 />
+                <span className="cr-label-hint">
+                  Available balance: {availableCredits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP. Credits are deducted after approval.
+                </span>
+                {rewardTooHigh && (
+                  <span className="cr-field-error">
+                    Reward amount cannot exceed your current balance.
+                  </span>
+                )}
             </div>
 
             </div>
@@ -724,7 +806,13 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
             </button>
             {!canSubmit && (
                 <span className="cr-submit-hint">
-                {!polygon.closed ? "Draw an area first" : "Fill in all required fields"}
+              {!isSignedIn
+                ? "Sign in to create a request"
+                : rewardTooHigh
+                ? "Lower the reward to fit your available balance"
+                : !polygon.closed
+                  ? "Draw an area first"
+                  : "Fill in all required fields"}
                 </span>
             )}
             </div>

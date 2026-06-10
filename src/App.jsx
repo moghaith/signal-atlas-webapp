@@ -90,7 +90,7 @@ function PageContent({ activePage, deviceData, apiMode, onNavigate, openLoginMod
     case "predictions":  return <PredictionInsightsPage {...sharedProps} />;
     case "map":          return <MapPage                {...sharedProps} />;
     case "regions":      return <RegionalComparisonPage {...sharedProps} />;
-    case "coverage":     return <CoverageRequestsPage   {...sharedProps} />;
+    case "coverage":     return <CoverageRequestsPage   {...sharedProps} openLoginModal={openLoginModal} />;
     case "statistics": return <StatisticsPage           {...sharedProps} />;
     case "profile":      return <ProfilePage onBack={() => onNavigate("overview") } onLoginClick={openLoginModal}/>;
     default:             return <OverviewPage           {...sharedProps} />;
