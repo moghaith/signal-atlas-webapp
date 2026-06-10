@@ -1,63 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://sa.agentraeg.com'
-const API_KEY = import.meta.env.VITE_API_KEY || ''
-
-
-const apiHeaders = {
-  "Content-Type": "application/json",
-  ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
-};
-
-async function coverageApiCall(endpoint, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      ...apiHeaders,
-      ...(options.headers || {}),
-    },
-  });
-  if (!response.ok) {
-    let detail = "";
-    try {
-      const raw = await response.text();
-      let body = raw;
-      try {
-        body = raw ? JSON.parse(raw) : "";
-      } catch {
-        body = raw;
-      }
-
-      if (Array.isArray(body)) {
-        // Top-level array of validation errors
-        detail = body
-          .map((it) => it?.msg || it?.message || it?.detail || JSON.stringify(it))
-          .join("; ");
-      } else if (body && typeof body === "object") {
-        const d = body.detail ?? body.message;
-        if (Array.isArray(d)) {
-          // FastAPI: { detail: [{ loc, msg, type }] }
-          detail = d
-            .map((it) => {
-              const loc = Array.isArray(it?.loc) ? it.loc.join(" → ") : "";
-              const msg = it?.msg || JSON.stringify(it);
-              return loc ? `${loc}: ${msg}` : msg;
-            })
-            .join("; ");
-        } else {
-          detail = d || JSON.stringify(body);
-        }
-      } else {
-        detail = String(body || "");
-      }
-    } catch {
-      detail = response.statusText;
-    }
-    throw new Error(`API ${response.status}: ${detail || response.statusText} (${endpoint})`);
-  }
-  return response.json();
-}
-
-// ─── GET /coverage-requests ───────────────────────────────────────────────────
-// Params: status, country, city, sort_by (all optional)
+import { get, post, patch, del } from "../services/apiClient";
 
 export async function getCoverageRequests({ status, country, city, sort_by } = {}) {
   const params = new URLSearchParams();
@@ -66,12 +7,8 @@ export async function getCoverageRequests({ status, country, city, sort_by } = {
   if (city)    params.set("city",    city);
   if (sort_by) params.set("sort_by", sort_by);
   const qs = params.toString();
-  return coverageApiCall(`/coverage-requests${qs ? `?${qs}` : ""}`);
+  return get(`/coverage-requests${qs ? `?${qs}` : ""}`, { auth: false });
 }
-
-// ─── GET /coverage-requests/nearby ───────────────────────────────────────────
-// Required: latitude, longitude
-// Optional: radius_km, status, country, city
 
 export async function getNearbyCoverageRequests({
   latitude,
@@ -89,59 +26,33 @@ export async function getNearbyCoverageRequests({
   if (status)  params.set("status",  status);
   if (country) params.set("country", country);
   if (city)    params.set("city",    city);
-  return coverageApiCall(`/coverage-requests/nearby?${params.toString()}`);
+  return get(`/coverage-requests/nearby?${params.toString()}`, { auth: false });
 }
-
-// ─── GET /coverage-requests/:id ──────────────────────────────────────────────
 
 export async function getCoverageRequest(requestId) {
-  return coverageApiCall(`/coverage-requests/${requestId}`);
+  return get(`/coverage-requests/${requestId}`, { auth: false });
 }
-
-// ─── GET /coverage-requests/:id/progress ─────────────────────────────────────
 
 export async function getCoverageRequestProgress(requestId) {
-  return coverageApiCall(`/coverage-requests/${requestId}/progress`);
+  return get(`/coverage-requests/${requestId}/progress`, { auth: false });
 }
-
-// ─── GET /coverage-requests/:id/contributions ────────────────────────────────
 
 export async function getCoverageRequestContributions(requestId) {
-  return coverageApiCall(`/coverage-requests/${requestId}/contributions`);
+  return get(`/coverage-requests/${requestId}/contributions`, { auth: false });
 }
-
-// ─── POST /coverage-requests ─────────────────────────────────────────────────
-// payload shape matches CreateCoverageRequest schema:
-// {
-//   title, description?, created_by,
-//   country?, city?,
-//   area: { type: "Polygon", coordinates: [[[lng, lat], ...]] },
-//   target_density_score, reward_amount
-// }
 
 export async function createCoverageRequest(payload) {
-    console.log(`${API_BASE_URL}/coverage-requests`, payload);
-  return coverageApiCall("/coverage-requests", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return post("/coverage-requests", payload, { auth: true });
 }
-
-// ─── PATCH /coverage-requests/:id ────────────────────────────────────────────
-// payload: any subset of updatable fields (title, description, status, etc.)
 
 export async function updateCoverageRequest(requestId, payload) {
-  return coverageApiCall(`/coverage-requests/${requestId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  return patch(`/coverage-requests/${requestId}`, payload, { auth: true });
 }
 
+export async function deleteCoverageRequest(requestId) {
+  return del(`/coverage-requests/${requestId}`, { auth: true });
+}
 
 export async function getPolygonDensityScore(geojson) {
-  return coverageApiCall("/coverage-requests/density-score", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ area: geojson }),
-  });
+  return post("/coverage-requests/density-score", { area: geojson }, { auth: false });
 }

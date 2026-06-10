@@ -5,7 +5,7 @@ import {
   Edit3, Check, X
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import { supabase } from "../lib/supabase";
+import { get, del } from "../services/apiClient";
 import "./ProfilePage.css";
 
 const TX_PAGE_SIZE = 20;
@@ -20,7 +20,6 @@ function txStyle(type) {
   return TX_TYPE_STYLES[type] || { bg: "#f8fafc", text: "#475569", border: "#e2e8f0" };
 }
 
-// ─── Reusable dialog ──────────────────────────────────────────────────────────
 function Dialog({ onBackdropClick, icon, iconColor = "#dc2626", title, children }) {
   return (
     <div className="cr-overlay" onClick={onBackdropClick}>
@@ -35,8 +34,7 @@ function Dialog({ onBackdropClick, icon, iconColor = "#dc2626", title, children 
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-export default function ProfilePage( {onLoginClick } ) {
+export default function ProfilePage({ onLoginClick }) {
   const { profile, signOut, refreshProfile, updateProfile: updateAuthProfile } = useAuth();
 
   const [wallet,       setWallet]       = useState(null);
@@ -48,19 +46,16 @@ export default function ProfilePage( {onLoginClick } ) {
   const [deviceSamples,  setDeviceSamples]  = useState({});
   const [samplesLoading, setSamplesLoading] = useState(true);
 
-  // delete dialog
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting,     setDeleting]     = useState(false);
   const [deleteError,  setDeleteError]  = useState(null);
 
-  // withdraw dialog
   const [showWithdraw,    setShowWithdraw]    = useState(false);
   const [withdrawAmount,  setWithdrawAmount]  = useState("");
   const [withdrawing,     setWithdrawing]     = useState(false);
   const [withdrawError,   setWithdrawError]   = useState(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
 
-  // editing username
   const [editingUsername, setEditingUsername] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [savingUsername, setSavingUsername] = useState(false);
@@ -72,15 +67,11 @@ export default function ProfilePage( {onLoginClick } ) {
     if (!profile?.id) return;
     setTxLoading(true);
 
-    supabase
-      .from("wallet_transactions")
-      .select("*")
-      .eq("user_id", profile.id)
-      .order("created_at", { ascending: false })
-      .limit(500)
-      .then(({ data, error }) => {
-        if (!error && data) setTransactions(data);
+    get(`/api/wallet/${profile.id}/transactions?limit=500`, { auth: true })
+      .then((data) => {
+        setTransactions(data?.transactions || []);
       })
+      .catch(() => setTransactions([]))
       .finally(() => setTxLoading(false));
 
     setWallet({ credits: profile.credits ?? 0 });
@@ -89,7 +80,6 @@ export default function ProfilePage( {onLoginClick } ) {
   useEffect(() => {
     if (!profile?.id) return;
     loadDevices();
-    loadDeviceSamples([]);
   }, [profile]);
 
   useEffect(() => {
@@ -99,14 +89,15 @@ export default function ProfilePage( {onLoginClick } ) {
   }, [profile]);
 
   const loadDevices = async () => {
-    const { data } = await supabase
-      .from("user_devices")
-      .select("device_id")
-      .eq("user_id", profile.id);
-
-    const deviceList = data?.map((d) => d.device_id) || [];
-    setDevices(deviceList);
-    loadDeviceSamples(deviceList);
+    try {
+      const data = await get("/api/users/me/devices", { auth: true });
+      const deviceList = (data || []).map((d) => d.device_id);
+      setDevices(deviceList);
+      loadDeviceSamples(deviceList);
+    } catch {
+      setDevices([]);
+      loadDeviceSamples([]);
+    }
   };
 
   const loadDeviceSamples = async (deviceIds) => {
@@ -121,11 +112,11 @@ export default function ProfilePage( {onLoginClick } ) {
     const results = await Promise.all(
       deviceIds.map(async (did) => {
         try {
-          const { count } = await supabase
-            .from("device_readings")
-            .select("*", { count: "exact", head: true })
-            .eq("source", did);
-          return { did, count: count ?? 0 };
+          const data = await get(
+            `/api/mobile/users_samples?device_id=${encodeURIComponent(did)}`,
+            { auth: false }
+          );
+          return { did, count: data?.total_samples_count ?? 0 };
         } catch {
           return { did, count: "—" };
         }
@@ -148,12 +139,10 @@ export default function ProfilePage( {onLoginClick } ) {
     setDeleteError(null);
 
     try {
-      const { error } = await supabase
-        .from("device_readings")
-        .delete()
-        .eq("source", deleteTarget);
-
-      if (error) throw error;
+      await del(
+        `/api/mobile/users_samples?device_id=${encodeURIComponent(deleteTarget)}`,
+        { auth: false }
+      );
 
       setDeleteTarget(null);
       loadDeviceSamples(devices);
@@ -165,25 +154,24 @@ export default function ProfilePage( {onLoginClick } ) {
   };
 
   const handleWithdraw = async () => {
-      const amount = Number(withdrawAmount);
-      if (!amount || amount <= 0) { setWithdrawError("Enter a valid amount."); return; }
-      const available = wallet ? Number(wallet.credits) : 0;
-      if (amount > available) { setWithdrawError(`Cannot exceed available balance of ${available.toLocaleString(undefined, { minimumFractionDigits: 2 })} EGP.`); return; }
-      setWithdrawing(true);
-      setWithdrawError(null);
-      try {
-        // TODO: wire to actual withdrawal API
-        await new Promise((r) => setTimeout(r, 800)); // placeholder
-        setWithdrawSuccess(true);
-        setWallet((w) => w ? { ...w, credits: (Number(w.credits) - amount).toFixed(2) } : w);
-      } catch (err) {
-        setWithdrawError(err.message);
-      } finally {
-        setWithdrawing(false);
-      }
-    };
+    const amount = Number(withdrawAmount);
+    if (!amount || amount <= 0) { setWithdrawError("Enter a valid amount."); return; }
+    const available = wallet ? Number(wallet.credits) : 0;
+    if (amount > available) { setWithdrawError(`Cannot exceed available balance of ${available.toLocaleString(undefined, { minimumFractionDigits: 2 })} EGP.`); return; }
+    setWithdrawing(true);
+    setWithdrawError(null);
+    try {
+      await new Promise((r) => setTimeout(r, 800));
+      setWithdrawSuccess(true);
+      setWallet((w) => w ? { ...w, credits: (Number(w.credits) - amount).toFixed(2) } : w);
+    } catch (err) {
+      setWithdrawError(err.message);
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
-    const handleSaveUsername = async () => {
+  const handleSaveUsername = async () => {
     if (!newUsername.trim()) return;
 
     setSavingUsername(true);
@@ -195,7 +183,6 @@ export default function ProfilePage( {onLoginClick } ) {
       });
 
       refreshProfile(updated);
-
       setEditingUsername(false);
     } catch (err) {
       setUsernameError(err.message);
@@ -214,7 +201,7 @@ export default function ProfilePage( {onLoginClick } ) {
   if (!profile) return (
     <main className="page-content pp-page">
       <div className="pp-signed-out">
-        <h2>You’re signed out</h2>
+        <h2>You're signed out</h2>
         <p>Please sign in to access your profile.</p>
 
         <button
@@ -239,10 +226,8 @@ export default function ProfilePage( {onLoginClick } ) {
         <p>Manage your account, review transactions, and track your registered devices.</p>
       </section>
 
-      {/* ── Hero ── */}
       <section className="pp-hero">
 
-        {/* Card 1: Profile */}
         <div className="pp-card pp-profile-card">
 
           <div className="pp-profile-top">
@@ -317,7 +302,6 @@ export default function ProfilePage( {onLoginClick } ) {
 
         </div>
 
-        {/* Card 2: Wallet */}
         <div className="pp-card pp-wallet-card">
 
           <div className="pp-wallet-top">
@@ -355,7 +339,6 @@ export default function ProfilePage( {onLoginClick } ) {
 
       {error && <div className="cr-error-banner">{error}</div>}
 
-      {/* ── Transactions ── */}
       <section className="pp-section">
         <div className="pp-section-head">
           <Wallet size={15} />
@@ -416,7 +399,6 @@ export default function ProfilePage( {onLoginClick } ) {
         )}
       </section>
 
-      {/* ── Devices ── */}
       <section className="pp-section">
         <div className="pp-section-head">
           <Monitor size={15} />
@@ -459,7 +441,6 @@ export default function ProfilePage( {onLoginClick } ) {
         )}
       </section>
 
-      {/* ── Delete samples dialog ── */}
       {deleteTarget && (
         <Dialog
           onBackdropClick={() => { if (!deleting) setDeleteTarget(null); }}
@@ -483,7 +464,6 @@ export default function ProfilePage( {onLoginClick } ) {
         </Dialog>
       )}
 
-      {/* ── Withdraw dialog ── */}
       {showWithdraw && (
         <Dialog
           onBackdropClick={() => { if (!withdrawing) setShowWithdraw(false); }}

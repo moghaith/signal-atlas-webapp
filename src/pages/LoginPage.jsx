@@ -10,6 +10,7 @@ export default function LoginPage({ onClose, onDone }) {
   const [mode, setMode] = useState("login"); // login | register
 
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -25,6 +26,11 @@ export default function LoginPage({ onClose, onDone }) {
     }
 
     if (mode === "register") {
+      if (!username.trim()) {
+        setError("Username is required.");
+        return;
+      }
+
       if (!password) {
         setError("Password is required.");
         return;
@@ -43,7 +49,7 @@ export default function LoginPage({ onClose, onDone }) {
       if (mode === "login") {
         await signIn(email.trim(), password);
       } else {
-        await signUp(email.trim(), password);
+        await signUp(email.trim(), password, username.trim());
       }
 
       onDone?.();
@@ -93,6 +99,21 @@ export default function LoginPage({ onClose, onDone }) {
               maxLength={100}
             />
           </div>
+
+          {/* USERNAME (REGISTER ONLY) */}
+          {mode === "register" && (
+            <div className="lp-field-group">
+              <label className="lp-label">Username</label>
+              <input
+                className="lp-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder="Choose a username"
+                maxLength={50}
+              />
+            </div>
+          )}
 
           {/* PASSWORD */}
           <div className="lp-field-group">

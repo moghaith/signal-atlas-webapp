@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getDevicesWithInfo,
   getDeviceReadings,
-  getSupabaseDeviceSources,
-  getSupabaseDeviceReadings,
   getMobileMap,
   getMobileOperators,
   getMobileOverview,
@@ -617,10 +615,8 @@ export default function useDeviceData(apiMode = "device") {
         return;
       }
 
-      const loadDevices =
-        effectiveApiMode === "supabase" ? getSupabaseDeviceSources : getDevicesWithInfo;
-      const loadReadings =
-        effectiveApiMode === "supabase" ? getSupabaseDeviceReadings : getDeviceReadings;
+      const loadDevices = getDevicesWithInfo;
+      const loadReadings = getDeviceReadings;
 
       const devicesData = await loadDevices();
       setDevices(devicesData || []);
@@ -628,7 +624,7 @@ export default function useDeviceData(apiMode = "device") {
       const regularDevices = (devicesData || []).filter(
         (d) => d?.device_id && !isPredictionSource(d.device_id)
       );
-      const denseReadingsLimit = effectiveApiMode === "supabase" ? 20000 : 1000;
+      const denseReadingsLimit = 1000;
 
       const regularHistories = await Promise.all(
         regularDevices.map((device) =>
