@@ -10,12 +10,22 @@
  *   GET /api/network-data/{device_id}?limit=...&offset=...
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://sa.agentraeg.com'
-const API_KEY = import.meta.env.VITE_API_KEY || ''
-import { get, post } from "../services/apiClient";
+const API_BASE_URL = 'https://sa.agentraeg.com'
 
 async function apiCall(endpoint, options = {}) {
-  return get(endpoint, { auth: false, ...options })
+  const headers = { 'Content-Type': 'application/json' }
+  const fetchOptions = { method: 'GET', headers, ...options }
+  if (fetchOptions.body) {
+    fetchOptions.body = typeof fetchOptions.body === 'string' ? fetchOptions.body : JSON.stringify(fetchOptions.body)
+  }
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchOptions)
+  if (!response.ok) {
+    let detail = ''
+    try { const body = await response.json(); detail = body?.detail || body?.message || '' } catch {}
+    throw new Error(detail || `${response.status} ${response.statusText}`)
+  }
+  if (response.status === 204) return null
+  return response.json()
 }
 
 async function tryEndpoints(endpoints) {

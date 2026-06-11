@@ -1,5 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://sa.agentraeg.com'
-const API_KEY = import.meta.env.VITE_API_KEY || ''
+const API_BASE_URL = 'https://sa.agentraeg.com'
+const API_KEY = 'ohnTcHS0nmGfk9pn6obclZpysjK8-y3O8zJn8S3xbqk'
 
 const TOKEN_KEY = 'signal_atlas_access_token'
 const REFRESH_TOKEN_KEY = 'signal_atlas_refresh_token'
