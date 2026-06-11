@@ -91,17 +91,17 @@ export default function ProfilePage({ onLoginClick }) {
   const loadDevices = async () => {
     try {
       const data = await get("/api/users/me/devices", { auth: true });
-      const deviceList = (data || []).map((d) => d.device_id);
-      setDevices(deviceList);
-      loadDeviceSamples(deviceList);
+      const devices = data || [];
+      setDevices(devices);
+      loadDeviceSamples(devices);
     } catch {
       setDevices([]);
       loadDeviceSamples([]);
     }
   };
 
-  const loadDeviceSamples = async (deviceIds) => {
-    if (!deviceIds?.length) {
+  const loadDeviceSamples = async (deviceList) => {
+    if (!deviceList?.length) {
       setDeviceSamples({});
       setSamplesLoading(false);
       return;
@@ -110,15 +110,15 @@ export default function ProfilePage({ onLoginClick }) {
     setSamplesLoading(true);
 
     const results = await Promise.all(
-      deviceIds.map(async (did) => {
+      deviceList.map(async (d) => {
         try {
           const data = await get(
-            `/api/mobile/users_samples?device_id=${encodeURIComponent(did)}`,
+            `/api/mobile/users_samples?device_id=${encodeURIComponent(d.device_id)}`,
             { auth: false }
           );
-          return { did, count: data?.total_samples_count ?? 0 };
+          return { did: d.device_id, count: data?.total_samples_count ?? 0 };
         } catch {
-          return { did, count: "—" };
+          return { did: d.device_id, count: "—" };
         }
       })
     );
@@ -415,23 +415,31 @@ export default function ProfilePage({ onLoginClick }) {
           <div className="pp-devices-table">
             <div className="pp-device-header">
               <span>Device ID</span>
-              <span>Total samples</span>
+              <span>Samples</span>
+              <span>Registered</span>
+              <span>Last seen</span>
               <span></span>
             </div>
-            {devices.map((did) => (
-              <div key={did} className="pp-device-row">
-                <span className="pp-device-id">{did}</span>
+            {devices.map((d) => (
+              <div key={d.id || d.device_id} className="pp-device-row">
+                <span className="pp-device-id">{d.device_id}</span>
                 <span className="pp-device-samples">
                   {samplesLoading ? (
                     <span className="pp-samples-loading">…</span>
-                  ) : typeof deviceSamples[did] === "number" ? (
-                    <span className="pp-samples-count">{deviceSamples[did].toLocaleString()}</span>
+                  ) : typeof deviceSamples[d.device_id] === "number" ? (
+                    <span className="pp-samples-count">{deviceSamples[d.device_id].toLocaleString()}</span>
                   ) : "—"}
+                </span>
+                <span className="pp-device-date">
+                  {d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}
+                </span>
+                <span className="pp-device-date">
+                  {d.last_seen_at ? new Date(d.last_seen_at).toLocaleDateString() : "—"}
                 </span>
                 <button
                   className="pp-device-delete-btn"
                   title="Delete all samples from this device"
-                  onClick={() => { setDeleteTarget(did); setDeleteError(null); }}
+                  onClick={() => { setDeleteTarget(d.device_id); setDeleteError(null); }}
                 >
                   <Trash2 size={13} />
                 </button>

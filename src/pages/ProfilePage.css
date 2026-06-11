@@ -377,226 +377,6 @@
   color: #64748b;
 }
 
-/* ─────────────────────────────
-   DEVICES
-───────────────────────────── */
-
-.pp-devices-table {
-  border: 0.5px solid #e2e8f0;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.pp-device-header,
-.pp-device-row {
-  display: grid;
-  grid-template-columns: 1fr 160px 44px;
-  padding: 12px 16px;
-}
-
-.pp-device-header {
-  font-size: 11px;
-  background: #f8fafc;
-  color: #94a3b8;
-  text-transform: uppercase;
-  border-bottom: 0.5px solid #e2e8f0;
-}
-
-.pp-device-row {
-  align-items: center;
-  border-bottom: 0.5px solid #e2e8f0;
-}
-
-.pp-device-row:hover {
-  background: #f8fafc;
-}
-
-.pp-device-id {
-  font-family: monospace;
-  font-size: 12px;
-}
-
-.pp-device-samples {
-  font-weight: 500;
-}
-
-.pp-samples-count {
-  color: #1d4ed8;
-}
-
-.pp-device-delete-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  border-radius: 6px;
-}
-
-.pp-device-delete-btn:hover {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-/* ─────────────────────────────
-   WITHDRAW INPUT
-───────────────────────────── */
-
-.pp-withdraw-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pp-withdraw-input-wrap {
-  display: flex;
-  gap: 6px;
-}
-
-.pp-withdraw-input {
-  flex: 1;
-  height: 42px;
-
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-
-  padding: 0 14px;
-  font-size: 15px;
-}
-
-.pp-withdraw-max-btn {
-  padding: 0 12px;
-  border: 0.5px solid #cbd5e1;
-  border-radius: 6px;
-
-  background: #f8fafc;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.pp-withdraw-max-btn:hover {
-  background: #eff6ff;
-}
-
-/* ─────────────────────────────
-   DIALOGS (unchanged)
-───────────────────────────── */
-
-.cr-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.cr-dialog {
-  background: white;
-  padding: 24px;
-  border-radius: 14px;
-  max-width: 400px;
-  width: 100%;
-}
-
-.cr-dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.pp-withdraw-btn:hover:not(:disabled) { background: #eff6ff; }
-.pp-withdraw-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* ── Logout ── */
-.pp-logout-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border: 0.5px solid var(--color-border-secondary, #cbd5e1);
-  border-radius: 6px;
-  background: none;
-  font-size: 13px;
-  color: var(--color-text-secondary, #64748b);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-  margin-left: auto;
-}
-.pp-logout-btn:hover {
-  background: #fef2f2;
-  color: #dc2626;
-  border-color: #fecaca;
-}
-
-/* ── Section ── */
-.pp-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.pp-section-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--color-text-secondary, #64748b);
-}
-
-.pp-section-head h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-primary, #0f172a);
-}
-
-.pp-section-count {
-  font-size: 12px;
-  color: var(--color-text-tertiary, #94a3b8);
-  background: var(--color-background-secondary, #f1f5f9);
-  padding: 1px 7px;
-  border-radius: 10px;
-  margin-left: 2px;
-}
-
-/* ── Empty state ── */
-.pp-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 36px 20px;
-  border: 0.5px dashed var(--color-border-tertiary, #e2e8f0);
-  border-radius: 10px;
-  color: var(--color-text-tertiary, #94a3b8);
-  font-size: 13px;
-}
-
-.pp-empty-icon {
-  opacity: 0.35;
-}
-
-/* ── Transactions table ── */
-.pp-tx-table {
-  border: 0.5px solid var(--color-border-tertiary, #e2e8f0);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.pp-tx-header {
-  display: grid;
-  grid-template-columns: 1.2fr 2fr 1.3fr 0.9fr 0.9fr;
-  padding: 9px 16px;
-  background: var(--color-background-secondary, #f8fafc);
-  border-bottom: 0.5px solid var(--color-border-tertiary, #e2e8f0);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-text-tertiary, #94a3b8);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 .pp-tx-row {
   display: grid;
   grid-template-columns: 1.2fr 2fr 1.3fr 0.9fr 0.9fr;
@@ -681,7 +461,7 @@
 
 .pp-device-header {
   display: grid;
-  grid-template-columns: 1fr 160px 44px;
+  grid-template-columns: 1fr 100px 120px 120px 44px;
   padding: 9px 16px;
   background: var(--color-background-secondary, #f8fafc);
   border-bottom: 0.5px solid var(--color-border-tertiary, #e2e8f0);
@@ -694,7 +474,7 @@
 
 .pp-device-row {
   display: grid;
-  grid-template-columns: 1fr 160px 44px;
+  grid-template-columns: 1fr 100px 120px 120px 44px;
   padding: 12px 16px;
   align-items: center;
   border-bottom: 0.5px solid var(--color-border-tertiary, #e2e8f0);
@@ -725,6 +505,11 @@
 
 .pp-samples-count {
   color: #1d4ed8;
+}
+
+.pp-device-date {
+  font-size: 12px;
+  color: var(--color-text-secondary, #64748b);
 }
 
 .pp-device-delete-btn {
