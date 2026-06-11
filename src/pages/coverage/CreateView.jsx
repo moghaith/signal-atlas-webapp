@@ -288,7 +288,6 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
   const [form, setForm] = useState({
     title: "",
     description: "",
-    created_by: "",
     country: "",
     city: "",
     target_density_score: "",
@@ -345,13 +344,6 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
   }, [centroid, deviceData]);
 
   useEffect(() => {
-    setForm((current) => ({
-      ...current,
-      created_by: user?.email || "",
-    }));
-  }, [user?.email]);
-
-  useEffect(() => {
     if (!user?.id) {
       setCreditBalance(null);
       setCreditLoading(false);
@@ -393,7 +385,6 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
     polygon.closed &&
     polygon.points.length >= 3 &&
     form.title.trim() &&
-    form.created_by.trim() &&
     targetDensity > 0 &&
     targetDensity > currentDensity &&
     form.reward_amount &&
@@ -462,7 +453,7 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
                     onClick={() => {
                     setSubmitSuccess(false);
                     setPolygon(INITIAL_POLYGON);
-                    setForm({ title: "", description: "", created_by: "", country: "", city: "", target_density_score: "", reward_amount: "" });
+                    setForm({ title: "", description: "", country: "", city: "", target_density_score: "", reward_amount: "" });
                     setMapMode("pan");
                     }}
                 >
@@ -647,9 +638,9 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
                 id="cr-created-by"
                 className="cr-input"
                 name="created_by"
-              value={form.created_by || (user?.email ?? "")}
+              value={user?.email ?? ""}
               readOnly
-              placeholder="Signed-in account"
+              placeholder={user ? "Signed-in account" : "Sign in required"}
                 maxLength={100}
                 />
             </div>
