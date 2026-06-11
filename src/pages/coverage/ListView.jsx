@@ -167,7 +167,12 @@ export default function ListView({ onSelect, onCreate }) {
 
               <span className="cr-card-location">
                 <User size={12} />
-                {req.created_by_display ?? req.created_by ?? "—"}
+                {(() => {
+                  const name = req.created_by_display || req.created_by || "—";
+                  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(name);
+                  const isTruncatedUUID = /^[0-9a-f]{8}$/i.test(name);
+                  return (isUUID || isTruncatedUUID) ? "Anonymous" : name;
+                })()}
               </span>
 
               {(req.city || req.country) && (

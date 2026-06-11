@@ -275,7 +275,7 @@ const INITIAL_POLYGON = { points: [], closed: false };
 const MAP_CENTER = [26.8206, 30.8025]; // Egypt center
 
 export default function CreateView({ onBack, onCreated, deviceData }) {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [mapMode, setMapMode] = useState("pan"); // "pan" | "draw" | "edit"
   const [polygon, setPolygon] = useState(INITIAL_POLYGON);
   const [editIndex, setEditIndex] = useState(null);
@@ -412,11 +412,8 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
       const result = await createCoverageRequest({
         title:                form.title.trim(),
         description:          form.description.trim() || null,
-        // public-safe display value
-        created_by:           displayName || user.email,
-        // explicit display field where supported by backend
+        created_by:           user.id,
         created_by_display:   displayName,
-        created_by_id:        user.id || null,
         ...(form.country.trim() ? { country: form.country.trim() } : {}),
         ...(form.city.trim()    ? { city:    form.city.trim()    } : {}),
         area:                 latlngsToGeoJsonPolygon(polygon.points),
@@ -433,6 +430,7 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
       }
 
       setSubmitting(false);
+      refreshProfile();
       onCreated(newId);
     } catch (err) {
       setSubmitError(err.message || "Failed to create coverage request.");
