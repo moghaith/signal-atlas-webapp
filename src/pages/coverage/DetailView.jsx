@@ -95,7 +95,12 @@ export default function DetailView({ id, onBack, onEdit }) {
       <div className="cr-detail-meta-grid">
         <div className="cr-meta-item"><span>Country</span><strong>{request.country || "—"}</strong></div>
         <div className="cr-meta-item"><span>City</span><strong>{request.city || "—"}</strong></div>
-        <div className="cr-meta-item"><span>Created by</span><strong>{request.created_by_display ?? request.created_by ?? "—"}</strong></div>
+        <div className="cr-meta-item"><span>Created by</span><strong>{(() => {
+          const name = request.created_by_display || request.created_by || "—";
+          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(name);
+          const isTruncatedUUID = /^[0-9a-f]{8}$/i.test(name);
+          return (isUUID || isTruncatedUUID) ? "Anonymous" : name;
+        })()}</strong></div>
         <div className="cr-meta-item"><span>Created</span><strong>{new Date(request.created_at).toLocaleDateString()}</strong></div>
         <div className="cr-meta-item"><span>Reward</span><strong>{Number(request.reward_amount).toLocaleString()} EGP</strong></div>
         <div className="cr-meta-item"><span>Contributors</span><strong>{request.contributors_count ?? 0}</strong></div>

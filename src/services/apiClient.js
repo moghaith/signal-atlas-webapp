@@ -93,7 +93,8 @@ async function request(endpoint, options = {}) {
     let detail = ''
     try {
       const body = await response.json()
-      detail = body?.detail || body?.message || ''
+      const raw = body?.detail || body?.message || ''
+      detail = typeof raw === 'object' ? JSON.stringify(raw) : raw
     } catch {}
     throw new Error(detail || `${response.status} ${response.statusText}`)
   }
