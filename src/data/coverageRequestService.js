@@ -1,17 +1,19 @@
+import { supabase } from '../lib/supabase';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://sa.agentraeg.com'
 const API_KEY = import.meta.env.VITE_API_KEY || ''
 
 
-const apiHeaders = {
-  "Content-Type": "application/json",
-  ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
-};
-
 async function coverageApiCall(endpoint, options = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers: {
-      ...apiHeaders,
+      "Content-Type": "application/json",
+      ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
   });

@@ -347,9 +347,9 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
   useEffect(() => {
     setForm((current) => ({
       ...current,
-      created_by: user?.email || "",
+      created_by: profile?.username || user?.email || "",
     }));
-  }, [user?.email]);
+  }, [profile?.username, user?.email]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -432,7 +432,7 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
       const result = await createCoverageRequest({
         title:                form.title.trim(),
         description:          form.description.trim() || null,
-        created_by:           user.email,
+        created_by:           profile?.username || user.email,
         created_by_id:        user.id || null,
         ...(form.country.trim() ? { country: form.country.trim() } : {}),
         ...(form.city.trim()    ? { city:    form.city.trim()    } : {}),
