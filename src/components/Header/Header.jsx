@@ -22,16 +22,26 @@ function Header({
   onNavigate, 
   onRefresh, 
   loading,
+  regions = [],
+  selectedRegion = "",
+  onRegionChange,
+  apiMode = "supabase",
+  onApiModeChange,
+}) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, profile, signOut } = useAuth();
 
-  countries, 
-  cities, 
-  selectedCountry, 
-  selectedCity,
+  const pathToTab = {
+    "/": "overview",
+    "/overview": "overview",
+    "/comparison": "detail",
+    "/map": "map",
+    "/reports": "reports",
+    "/operators": "operators",
+  };
 
-  onCountryChange, onCityChange, onLoginClick }) {
-  const { profile } = useAuth();
-
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const activePage = pathToTab[location.pathname] || activePageProp || "overview";
 
   const tabs = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
