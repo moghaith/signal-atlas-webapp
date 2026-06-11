@@ -1,6 +1,2 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Supabase client removed — auth now handled via backend API
+// See src/services/apiClient.js and src/contexts/AuthContext.jsx

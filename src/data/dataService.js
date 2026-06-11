@@ -12,53 +12,10 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://sa.agentraeg.com'
 const API_KEY = import.meta.env.VITE_API_KEY || ''
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://lxsnfitbbbfbignmxsdk.supabase.co'
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-
-const apiHeaders = {
-  'Content-Type': 'application/json',
-  ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
-}
-
-const supabaseHeaders = {
-  'Content-Type': 'application/json',
-  ...(SUPABASE_ANON_KEY ? {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  } : {}),
-}
+import { get, post } from "../services/apiClient";
 
 async function apiCall(endpoint, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      ...apiHeaders,
-      ...(options.headers || {}),
-    },
-  })
-  if (!response.ok) {
-    throw new Error(`API ${response.status}: ${response.statusText} (${endpoint})`)
-  }
-  return response.json()
-}
-
-async function supabaseCall(path, params = {}) {
-  if (!SUPABASE_ANON_KEY) {
-    throw new Error('Missing VITE_SUPABASE_ANON_KEY for Supabase mode')
-  }
-
-  const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`)
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      url.searchParams.set(key, String(value))
-    }
-  })
-
-  const response = await fetch(url.toString(), { headers: supabaseHeaders })
-  if (!response.ok) {
-    throw new Error(`Supabase ${response.status}: ${response.statusText}`)
-  }
-  return response.json()
+  return get(endpoint, { auth: false, ...options })
 }
 
 async function tryEndpoints(endpoints) {
@@ -77,33 +34,6 @@ export async function getDevicesWithInfo() {
   return tryEndpoints(['/api/devices'])
 }
 
-export async function getSupabaseDevicesWithInfo() {
-  const rows = await supabaseCall('device_readings', {
-    select: 'source,timestamp',
-    source: 'not.is.null',
-    order: 'timestamp.desc',
-    limit: 10000,
-  })
-
-  const byDevice = new Map()
-  for (const row of rows || []) {
-    const deviceId = row.source
-    if (!deviceId) continue
-    if (!byDevice.has(deviceId)) {
-      byDevice.set(deviceId, {
-        device_id: deviceId,
-        reading_count: 0,
-        last_reading: row.timestamp || null,
-      })
-    }
-    const entry = byDevice.get(deviceId)
-    entry.reading_count += 1
-    if (!entry.last_reading && row.timestamp) entry.last_reading = row.timestamp
-  }
-
-  return Array.from(byDevice.values()).sort((a, b) => a.device_id.localeCompare(b.device_id))
-}
-
 export async function getDeviceReadings(deviceId, limit = 50) {
   const encoded = encodeURIComponent(deviceId)
   const result = await tryEndpoints([
@@ -115,57 +45,6 @@ export async function getDeviceReadings(deviceId, limit = 50) {
   return rows
     .filter((row) => row?.timestamp)
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-}
-
-export async function getSupabaseDeviceReadings(deviceId, limit = 50) {
-  const select = 'source,timestamp,latitude,longitude,altitude,level,asu,rsrp,rssi,dbm,rsrq,network_type,operator,cell_id,physical_cell_id,tracking_area_code,country,city,created_at,rsrp_uncertainty,rsrq_uncertainty'
-  const chunkSize = 1000
-  const target = Math.max(1, Number(limit) || 50)
-  let offset = 0
-  const allRows = []
-
-  while (allRows.length < target) {
-    const remaining = target - allRows.length
-    const batchLimit = Math.min(chunkSize, remaining)
-
-    const chunk = await supabaseCall('device_readings', {
-      select,
-      source: `eq.${deviceId}`,
-      order: 'timestamp.asc',
-      limit: batchLimit,
-      offset,
-    })
-
-    if (!Array.isArray(chunk) || chunk.length === 0) break
-    allRows.push(...chunk)
-    offset += chunk.length
-
-    if (chunk.length < batchLimit) break
-  }
-
-  return allRows.map((row) => ({
-    device_id: row.source,
-    timestamp: row.timestamp,
-    latitude: row.latitude,
-    longitude: row.longitude,
-    altitude: row.altitude,
-    level: row.level,
-    asu: row.asu,
-    rsrp: row.rsrp,
-    rssi: row.rssi,
-    dbm: row.dbm,
-    rsrq: row.rsrq,
-    network_type: row.network_type,
-    operator: row.operator,
-    cell_id: row.cell_id,
-    physical_cell_id: row.physical_cell_id,
-    tracking_area_code: row.tracking_area_code,
-    country: row.country,
-    city: row.city,
-    created_at: row.created_at,
-    rsrp_uncertainty: row.rsrp_uncertainty,
-    rsrq_uncertainty: row.rsrq_uncertainty,
-  }))
 }
 
 export async function getDeviceLocations() {
@@ -200,35 +79,6 @@ export async function getDeviceLocations() {
   )
 
   return latestRows.filter(Boolean)
-}
-
-export async function getSupabaseDeviceLocations() {
-  const rows = await supabaseCall('device_readings', {
-    select: 'source,timestamp,latitude,longitude,rsrp,rsrq,level,operator,network_type',
-    source: 'not.is.null',
-    latitude: 'not.is.null',
-    longitude: 'not.is.null',
-    order: 'timestamp.desc',
-    limit: 10000,
-  })
-
-  const latestByDevice = new Map()
-  for (const row of rows || []) {
-    if (!row.source || latestByDevice.has(row.source)) continue
-    latestByDevice.set(row.source, {
-      device_id: row.source,
-      latitude: row.latitude,
-      longitude: row.longitude,
-      rsrp: row.rsrp,
-      rsrq: row.rsrq,
-      level: row.level,
-      operator: row.operator,
-      network_type: row.network_type,
-      timestamp: row.timestamp,
-    })
-  }
-
-  return Array.from(latestByDevice.values())
 }
 
 function buildMobileQuery(filters = {}) {
@@ -314,34 +164,6 @@ export function getReadingStats(readings) {
     asu: calcStats(readings.map((r) => r.asu)),
     level: calcStats(readings.map((r) => r.level)),
   }
-}
-
-async function supabaseRpcCall(functionName) {
-  if (!SUPABASE_ANON_KEY) {
-    throw new Error('Missing VITE_SUPABASE_ANON_KEY for Supabase mode')
-  }
-
-  const url = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: supabaseHeaders,
-  })
-  if (!response.ok) {
-    throw new Error(`Supabase RPC ${response.status}: ${response.statusText} (${functionName})`)
-  }
-  return response.json()
-}
-
-export async function getSupabaseDeviceSources() {
-  return supabaseRpcCall('get_device_sources')
-}
-
-export async function getSupabaseReadingAggregates() {
-  return supabaseRpcCall('get_reading_aggregates')
-}
-
-export async function getSupabaseReadingDistributions() {
-  return supabaseRpcCall('get_reading_distributions')
 }
 
 export async function getAiDashboardSummary(payload) {

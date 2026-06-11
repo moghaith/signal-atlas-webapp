@@ -6,10 +6,6 @@ import L from "leaflet";
 import "leaflet.heat";
 import 'leaflet/dist/leaflet.css';
 import { getConfidenceLevel } from "../hooks/useDeviceData";
-import {
-  getSupabaseReadingAggregates,
-  getSupabaseReadingDistributions,
-} from "../data/dataService";
 import "./MapPage.css";
 import "../styles/global.css";
 
@@ -448,31 +444,7 @@ function MapPage({ deviceData, apiMode }) {
   const [heatMetric, setHeatMetric] = useState("rsrp");
   const [expanded, setExpanded] = useState(false);
 
-  const [globalStats, setGlobalStats] = useState(null);
-  const [globalDistributions, setGlobalDistributions] = useState(null);
 
-  useEffect(() => {
-    if (apiMode !== "supabase") return;
-    Promise.all([
-      getSupabaseReadingAggregates().catch(() => null),
-      getSupabaseReadingDistributions().catch(() => null),
-    ]).then(([aggs, dists]) => {
-      setGlobalStats(aggs?.[0] ?? null);
-      if (dists?.[0]) {
-        const dist = dists[0].get_reading_distributions;
-        if (dist) {
-          const netTypes = (dist.network_types || []).reduce((acc, item) => {
-            const key = item.type || "Unknown";
-            const existing = acc.find(e => e.type === key);
-            if (existing) existing.count += item.count;
-            else acc.push({ type: key, count: item.count });
-            return acc;
-          }, []);
-          setGlobalDistributions({ network_types: netTypes, operators: dist.operators || [], top_cities: dist.top_cities || [] });
-        }
-      }
-    });
-  }, [apiMode]);
 
   const allRegionsEnabled = showAllRegions || selectedRegion === ALL_REGIONS_ID;
 
@@ -710,100 +682,7 @@ function MapPage({ deviceData, apiMode }) {
           </span>
         </section>
 
-        {globalStats && (
-          <section className="map-db-stats">
-            <h3>Database Statistics</h3>
-            <div className="db-stats-grid">
-              {[
-                { label: "Total Readings", value: globalStats.total_readings?.toLocaleString() },
-                { label: "Unique Sources", value: globalStats.unique_sources },
-                { label: "Unique Cells", value: globalStats.unique_cells },
-                { label: "Cities", value: globalStats.unique_cities },
-                { label: "Avg RSRP", value: globalStats.avg_rsrp, unit: "dBm" },
-                { label: "Avg RSRQ", value: globalStats.avg_rsrq, unit: "dB" },
-                { label: "Avg RSSI", value: globalStats.avg_rssi, unit: "dBm" },
-              ].map(({ label, value, unit }) => (
-                <div key={label} className="db-stat-card">
-                  <span className="stat-label">{label}</span>
-                  <span className="stat-value">
-                    {value}{unit && <span style={{ fontSize: 12, fontWeight: 400, color: "#64748b" }}> {unit}</span>}
-                  </span>
-                </div>
-              ))}
-              <div className="db-stat-card">
-                <span className="stat-label">Date Range</span>
-                <span className="stat-value" style={{ fontSize: 13 }}>{globalStats.earliest_reading?.slice(0, 10)}</span>
-                <span className="stat-sub">to {globalStats.latest_reading?.slice(0, 10)}</span>
-              </div>
-            </div>
 
-            <div className="db-stat-card" style={{ padding: "14px 16px" }}>
-              <span className="stat-label">Signal Quality Distribution</span>
-              {(() => {
-                const total = globalStats.total_readings || 1;
-                const bars = [
-                  { key: "excellent_count", color: "#22c55e", label: "Excellent" },
-                  { key: "good_count",      color: "#6b9ae8", label: "Good" },
-                  { key: "fair_count",      color: "#f59e0b", label: "Fair" },
-                  { key: "poor_count",      color: "#ef4444", label: "Poor" },
-                  { key: "no_signal_count", color: "#94a3b8", label: "No data" },
-                ];
-                return (
-                  <div>
-                    <div className="db-quality-bar">
-                      {bars.map(({ key, color, label }) => {
-                        const count = globalStats[key] || 0;
-                        return count ? (
-                          <div key={key} style={{ width: `${(count / total) * 100}%`, background: color, minWidth: 24 }}>
-                            {`${Math.round((count / total) * 100)}%`}
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                    <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#64748b", marginTop: 6, flexWrap: "wrap" }}>
-                      {bars.map(({ key, label }) => (
-                        <span key={key}>{label}: {(globalStats[key] || 0).toLocaleString()}</span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {globalDistributions && (
-              <div className="db-dist-grid">
-                {[
-                  { title: "Network Type Distribution", items: globalDistributions.network_types, keyField: "type" },
-                  { title: "Top Operators", items: globalDistributions.operators, keyField: "name" },
-                ].map(({ title, items, keyField }) => (
-                  <div key={title} className="db-dist-table">
-                    <h4>{title}</h4>
-                    <table>
-                      <tbody>
-                        {items.map(item => {
-                          const maxCount = items[0]?.count || 1;
-                          return (
-                            <tr key={item[keyField]}>
-                              <td>{item[keyField]}</td>
-                              <td>
-                                <div className="dist-bar-wrap">
-                                  <div className="dist-bar">
-                                    <div className="dist-bar-fill" style={{ width: `${(item.count / maxCount) * 100}%` }} />
-                                  </div>
-                                  <span>{item.count.toLocaleString()}</span>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
       </main>
     </div>
   );
