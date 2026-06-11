@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import "./CoverageRequests.css";
 import { useAuth } from "../../contexts/AuthContext";
 import { createCoverageRequest, getPolygonDensityScore } from "../../data/coverageRequestService";
-import { supabase } from "../../lib/supabase";
+import { get } from "../../services/apiClient";
 import {
   HiOutlineMap,
   HiOutlineSignal,
@@ -361,14 +361,9 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
     let cancelled = false;
     setCreditLoading(true);
 
-    supabase
-      .from("profiles")
-      .select("credits")
-      .eq("id", user.id)
-      .single()
-      .then(({ data, error }) => {
+    get('/api/users/me', { auth: true })
+      .then((data) => {
         if (cancelled) return;
-        if (error) throw error;
         setCreditBalance(Number(data?.credits ?? 0));
       })
       .catch(() => {
@@ -412,14 +407,7 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const { data: latestProfile, error: profileError } = await supabase
-        .from("profiles")
-        .select("credits")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError) throw profileError;
-
+      const latestProfile = await get('/api/users/me', { auth: true });
       const latestCredits = Number(latestProfile?.credits ?? 0);
       const requestedReward = Number(form.reward_amount);
 
