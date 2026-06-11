@@ -408,10 +408,14 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
         );
       }
 
+      const displayName = profile?.username || profile?.display_name || null;
       const result = await createCoverageRequest({
         title:                form.title.trim(),
         description:          form.description.trim() || null,
-        created_by:           user.email,
+        // public-safe display value
+        created_by:           displayName || user.email,
+        // explicit display field where supported by backend
+        created_by_display:   displayName,
         created_by_id:        user.id || null,
         ...(form.country.trim() ? { country: form.country.trim() } : {}),
         ...(form.city.trim()    ? { city:    form.city.trim()    } : {}),
@@ -638,7 +642,7 @@ export default function CreateView({ onBack, onCreated, deviceData }) {
                 id="cr-created-by"
                 className="cr-input"
                 name="created_by"
-              value={user?.email ?? ""}
+              value={profile?.username ?? profile?.display_name ?? user?.email ?? ""}
               readOnly
               placeholder={user ? "Signed-in account" : "Sign in required"}
                 maxLength={100}

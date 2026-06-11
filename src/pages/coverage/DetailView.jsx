@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   getCoverageRequest,
   getCoverageRequestProgress,
@@ -28,6 +29,7 @@ const STATUS_COLORS = {
 };
 
 export default function DetailView({ id, onBack, onEdit }) {
+  const { user } = useAuth();
   const [request,       setRequest]       = useState(null);
   const [progress,      setProgress]      = useState(null);
   const [contributions, setContributions] = useState([]);
@@ -81,7 +83,9 @@ export default function DetailView({ id, onBack, onEdit }) {
             {request.status}
           </span>
         </div>
-        <button className="cr-btn cr-btn-secondary" onClick={() => onEdit(id)}>Edit</button>
+        {user && request.created_by === user.id && (
+          <button className="cr-btn cr-btn-secondary" onClick={() => onEdit(id)}>Edit</button>
+        )}
       </div>
 
       {request.description && (
@@ -91,7 +95,7 @@ export default function DetailView({ id, onBack, onEdit }) {
       <div className="cr-detail-meta-grid">
         <div className="cr-meta-item"><span>Country</span><strong>{request.country || "—"}</strong></div>
         <div className="cr-meta-item"><span>City</span><strong>{request.city || "—"}</strong></div>
-        <div className="cr-meta-item"><span>Created by</span><strong>{request.created_by}</strong></div>
+        <div className="cr-meta-item"><span>Created by</span><strong>{request.created_by_display ?? request.created_by ?? "—"}</strong></div>
         <div className="cr-meta-item"><span>Created</span><strong>{new Date(request.created_at).toLocaleDateString()}</strong></div>
         <div className="cr-meta-item"><span>Reward</span><strong>{Number(request.reward_amount).toLocaleString()} EGP</strong></div>
         <div className="cr-meta-item"><span>Contributors</span><strong>{request.contributors_count ?? 0}</strong></div>
