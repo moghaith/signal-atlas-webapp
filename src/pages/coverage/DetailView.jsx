@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   getCoverageRequest,
   getCoverageRequestProgress,
@@ -28,6 +29,7 @@ const STATUS_COLORS = {
 };
 
 export default function DetailView({ id, onBack, onEdit }) {
+  const { user } = useAuth();
   const [request,       setRequest]       = useState(null);
   const [progress,      setProgress]      = useState(null);
   const [contributions, setContributions] = useState([]);
@@ -81,7 +83,9 @@ export default function DetailView({ id, onBack, onEdit }) {
             {request.status}
           </span>
         </div>
-        <button className="cr-btn cr-btn-secondary" onClick={() => onEdit(id)}>Edit</button>
+        {user && request.created_by === user.id && (
+          <button className="cr-btn cr-btn-secondary" onClick={() => onEdit(id)}>Edit</button>
+        )}
       </div>
 
       {request.description && (

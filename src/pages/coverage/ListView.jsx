@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Trash2, Target, Banknote, AlertTriangle } from "lucide-react";
+import { Trash2, Target, Banknote, AlertTriangle, User } from "lucide-react";
 import Select from "react-select";
 import { selectStyles } from "../../styles/selectStyles";
+import { useAuth } from "../../contexts/AuthContext";
 import { getCoverageRequests, updateCoverageRequest } from "../../data/coverageRequestService";
 
 const STATUS_COLORS = {
@@ -11,6 +12,7 @@ const STATUS_COLORS = {
 };
 
 export default function ListView({ onSelect, onCreate }) {
+  const { user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
@@ -134,7 +136,7 @@ export default function ListView({ onSelect, onCreate }) {
           const progress = req.target_density_score > 0
             ? Math.min(100, (req.current_density_score / req.target_density_score) * 100)
             : 0;
-          const isCancellable = req.status === "OPEN";
+          const isCancellable = req.status === "OPEN" && user && req.created_by === user.id;
 
           return (
             <div key={req.id} className="cr-card" onClick={() => onSelect(req.id)}>
@@ -162,6 +164,11 @@ export default function ListView({ onSelect, onCreate }) {
                   )}
                 </div>
               </div>
+
+              <span className="cr-card-location">
+                <User size={12} />
+                {req.created_by_display ?? req.created_by ?? "—"}
+              </span>
 
               {(req.city || req.country) && (
                 <span className="cr-card-location">
