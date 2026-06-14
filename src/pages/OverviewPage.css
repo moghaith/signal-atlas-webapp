@@ -218,12 +218,19 @@
 @media (max-width: 600px) {
   .stat-cards-grid,
   .device-summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .two-col-grid {
     grid-template-columns: 1fr;
   }
   .page-intro h2 {
-    font-size: 28px;
+    font-size: 24px;
+  }
+  .page-intro p {
+    font-size: 13px;
   }
   .page-content {
-    padding: 16px;
+    padding: 12px;
+    gap: 14px;
   }
 }

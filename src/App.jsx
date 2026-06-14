@@ -5,6 +5,7 @@ import useDeviceData from "./hooks/useDeviceData";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import './App.css'// index.js
+import './styles/mobile.css';
 
 const OverviewPage     = lazy(() => import("./pages/OverviewPage"));
 const MapPage          = lazy(() => import("./pages/MapPage"));

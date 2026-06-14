@@ -1,0 +1,156 @@
+@media (max-width: 600px) {
+
+  /* ── Page chrome ── */
+  .page-content {
+    padding: 12px !important;
+    gap: 14px !important;
+  }
+
+  .page-intro h2 {
+    font-size: 22px !important;
+  }
+
+  /* ── Filter bars: stack vertically ── */
+  .map-filters {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .map-toggle {
+    grid-template-columns: 110px 1fr !important;
+  }
+
+  /* ── All multi-col grids → 1 col ── */
+  .two-col-grid,
+  .stats-two-col,
+  .stats-panels-grid,
+  .reports-two-col,
+  .reports-two-col.compact,
+  .comparison-grid,
+  .db-dist-grid,
+  .coverage-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Keep stat cards 2-up */
+  .stat-cards-grid,
+  .device-summary-cards {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* ── Chart cards: just need clean sizing, ChartWrapper handles the rest ── */
+  .chart-card {
+    padding: 12px 10px 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* ────────────────────────────────────────────────
+     TABLE
+     - Containers scroll horizontally
+     - text wraps only at spaces (no mid-word breaks)
+  ─────────────────────────────────────────────────── */
+  .comparison-table-wrap,
+  .cr-contributors-table,
+  .cr-table-wrap,
+  .pp-tx-table,
+  .pp-devices-table {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .comparison-table th,
+  .comparison-table td,
+  .pp-tx-header span,
+  .pp-tx-row span,
+  .cr-contrib-header span,
+  .cr-contrib-row > div {
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    hyphens: none !important;
+    font-size: 12px !important;
+    padding: 8px 10px !important;
+  }
+
+  /* Min widths so columns have enough room and don't overlap */
+  .comparison-table {
+    min-width: 600px;
+  }
+
+  .pp-tx-table {
+    min-width: 540px;
+  }
+
+  /* ── Map layout ── */
+  .map-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .map-side-panel {
+    display: none !important;
+  }
+
+  .map-canvas,
+  .leaflet-map {
+    height: 300px !important;
+    min-height: 300px !important;
+  }
+
+  /* ── Map db stats grid ── */
+  .db-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* ── Statistics panels ── */
+  .statistics-stat-cards-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* ── Coverage requests ── */
+  .cr-cards-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cr-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cr-span-2 {
+    grid-column: span 1 !important;
+  }
+
+  .cr-detail-meta-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .cr-list-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .cr-filters {
+    flex-wrap: wrap !important;
+    overflow-x: visible !important;
+  }
+
+  .cr-filter-input {
+    width: 100% !important;
+  }
+
+  /* ── Profile hero ── */
+  .pp-hero {
+    flex-direction: column !important;
+  }
+
+  /* ── Box plots ── */
+  .boxplot-svg {
+    overflow: visible;
+  }
+
+  /* ── Section heads ── */
+  .stats-section-head h3,
+  .reports-section-head h3 {
+    font-size: 16px !important;
+  }
+}

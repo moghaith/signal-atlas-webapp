@@ -34,12 +34,12 @@ function Header({
   const [filtersOpen, setFiltersOpen] = useState(true);
 
   const tabs = [
-    { id: "overview", label: "Overview", icon: LayoutDashboard },
-    { id: "map", label: "Map View", icon: Map },
-    { id: "regions", label: "Regional Comparison", icon: GitCompare },
-    { id: "predictions", label: "Prediction Insights", icon: TrendingUp  },
-    { id: "statistics", label: "Statistics", icon: BarChart3 },
-    { id: "coverage", label: "Coverage Request", icon: MapPin },
+    { id: "overview",    label: "Overview",            shortLabel: "Overview",  icon: LayoutDashboard },
+    { id: "map",         label: "Map View",            shortLabel: "Map",       icon: Map },
+    { id: "regions",     label: "Regional Comparison", shortLabel: "Regions",   icon: GitCompare },
+    { id: "predictions", label: "Prediction Insights", shortLabel: "Insights",  icon: TrendingUp },
+    { id: "statistics",  label: "Statistics",          shortLabel: "Stats",     icon: BarChart3 },
+    { id: "coverage",    label: "Coverage Request",    shortLabel: "Coverage",  icon: MapPin },
   ];
 
   const countryOptions = countries.map((c) => ({

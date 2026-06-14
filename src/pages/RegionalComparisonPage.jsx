@@ -15,6 +15,7 @@ import {
 import Select from "react-select";
 import { selectStyles } from "../styles/selectStyles";
 import useDeviceData from "../hooks/useDeviceData";
+import ChartWrapper from "../components/charts/ChartWrapper";
 import "../components/charts/SignalCharts.css";
 import "./RegionalComparisonPage.css";
 import "../styles/global.css";
@@ -469,7 +470,9 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
               <h3 className="chart-card-title">Mean RSRP Per City</h3>
               <span className="chart-card-note">|RSRP| dBm — lower absolute value = stronger signal</span>
             </div>
-            <ResponsiveContainer width="100%" height={260}>
+            <ChartWrapper height={260}>
+              {(width) => (
+              <ResponsiveContainer width={width} height={260}>
               <BarChart
                 data={rsrpCityData}
                 margin={{ top: 8, right: 16, left: -10, bottom: 8 }}
@@ -505,7 +508,9 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
                   isAnimationActive={false}
                 />
               </BarChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+              )}
+            </ChartWrapper>
           </div>
 
           <div className="chart-card">
@@ -513,7 +518,9 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
               <h3 className="chart-card-title">Mean RSRQ Per City</h3>
               <span className="chart-card-note">|RSRQ| dB — lower absolute value = better quality</span>
             </div>
-            <ResponsiveContainer width="100%" height={260}>
+            <ChartWrapper height={260}>
+              {(width) => (
+              <ResponsiveContainer width={width} height={260}>
               <BarChart
                 data={rsrqCityData}
                 margin={{ top: 8, right: 16, left: -10, bottom: 8 }}
@@ -548,7 +555,9 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
                   isAnimationActive={false}
                 />
               </BarChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+              )}
+            </ChartWrapper>
           </div>
         </div>
 
@@ -646,7 +655,9 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
         <section className="reports-three-col">
           <div className="chart-card">
             <h3 className="chart-card-title">Mean RSRP Trend</h3>
-            <ResponsiveContainer width="100%" height={220}>
+            <ChartWrapper height={220}>
+              {(width) => (
+              <ResponsiveContainer width={width} height={220}>
               <LineChart data={rsrpComparisonTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis
@@ -669,12 +680,16 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
                 <Line type="monotone" dataKey="cityA" stroke="#2563eb" dot={false} strokeWidth={2} name={defaultCityA || "City A"} />
                 <Line type="monotone" dataKey="cityB" stroke="#7c3aed" dot={false} strokeWidth={2} name={defaultCityB || "City B"} />
               </LineChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+              )}
+            </ChartWrapper>
           </div>
 
           <div className="chart-card">
             <h3 className="chart-card-title">Mean RSRQ Trend</h3>
-            <ResponsiveContainer width="100%" height={220}>
+            <ChartWrapper height={220}>
+              {(width) => (
+              <ResponsiveContainer width={width} height={220}>
               <LineChart data={rsrqComparisonTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis
@@ -686,23 +701,23 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
                 />
                 <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  formatter={(v) =>
-                    v == null ? "-" : Number(v).toFixed(1)
-                  }
-                  labelFormatter={(v) =>
-                    formatChartDate(v, selectedPeriod)
-                  }
+                  formatter={(v) => v == null ? "-" : Number(v).toFixed(1)}
+                  labelFormatter={(v) => formatChartDate(v, selectedPeriod)}
                 />
                 <Legend />
                 <Line type="monotone" dataKey="cityA" stroke="#0ea5e9" dot={false} strokeWidth={2} name={defaultCityA || "City A"} />
                 <Line type="monotone" dataKey="cityB" stroke="#9333ea" dot={false} strokeWidth={2} name={defaultCityB || "City B"} />
               </LineChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+              )}
+            </ChartWrapper>
           </div>
 
           <div className="chart-card">
             <h3 className="chart-card-title">Coverage Quality % Trend</h3>
-            <ResponsiveContainer width="100%" height={220}>
+            <ChartWrapper height={220}>
+              {(width) => (
+              <ResponsiveContainer width={width} height={220}>
               <LineChart data={coverageComparisonTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis
@@ -714,18 +729,16 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
                 />
                 <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} domain={[0, 100]} />
                 <Tooltip
-                  formatter={(v) =>
-                    v == null ? "-" : `${Number(v).toFixed(1)}%`
-                  }
-                  labelFormatter={(v) =>
-                    formatChartDate(v, selectedPeriod)
-                  }
+                  formatter={(v) => v == null ? "-" : `${Number(v).toFixed(1)}%`}
+                  labelFormatter={(v) => formatChartDate(v, selectedPeriod)}
                 />
                 <Legend />
                 <Line type="monotone" dataKey="cityA" stroke="#16a34a" dot={false} strokeWidth={2} name={defaultCityA || "City A"} />
                 <Line type="monotone" dataKey="cityB" stroke="#15803d" dot={false} strokeWidth={2} name={defaultCityB || "City B"} />
               </LineChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+              )}
+            </ChartWrapper>
           </div>
         </section>
       </main>

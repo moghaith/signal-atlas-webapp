@@ -328,3 +328,72 @@
     width: 180px;
   }
 }
+
+/* ===================================
+   MOBILE NAV  (≤ 600px)
+   =================================== */
+
+@media (max-width: 600px) {
+  .header-row {
+    height: 56px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .logo-img {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* Nav scrolls horizontally, labels hidden — icon-only tabs */
+  .header-nav {
+    gap: 0;
+  }
+
+  .nav-link {
+    padding: 8px 10px;
+    font-size: 0;        /* hide label text */
+    gap: 0;
+  }
+
+  /* Keep the icon visible at normal size */
+  .nav-link svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .header-actions {
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .login-btn {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .filter-toggle-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Filter row: stack selects vertically */
+  .filter-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .filter-select {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+  }
+}
