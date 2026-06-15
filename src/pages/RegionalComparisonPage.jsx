@@ -578,7 +578,7 @@ function RegionalComparisonPage({ deviceData, apiMode }) {
             <tbody>
               {pagedRows.map((city) => (
                 <tr key={city.city_label}>
-                  <td title={city.city}>{city.city}</td>
+                  <td title={city.city}>{city.city.length > 22 ? city.city.slice(0, 22) + "…" : city.city}</td>
                   <td>{city.country}</td>
                   <td>
                     <div className="coverage-cell">

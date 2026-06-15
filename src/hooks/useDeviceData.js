@@ -258,6 +258,68 @@ function normalizeRange(value, min, max) {
   return Math.max(0, Math.min(1, (value - min) / (max - min)));
 }
 
+function computeSpatialCoverageQuality(rows) {
+  if (!rows.length) return null;
+
+  const PRECISION = 2; // 0.01° ~ 1.1 km grid cells
+  const step = 1 / Math.pow(10, PRECISION);
+  const cells = new Map();
+
+  for (const row of rows) {
+    const lat = toNumber(row.latitude);
+    const lng = toNumber(row.longitude);
+    const rsrp = toNumber(row.rsrp);
+    if (lat == null || lng == null || rsrp == null) continue;
+
+    const key = `${lat.toFixed(PRECISION)},${lng.toFixed(PRECISION)}`;
+    const cell = cells.get(key) || { sum: 0, count: 0 };
+    cell.sum += rsrp;
+    cell.count += 1;
+    cells.set(key, cell);
+  }
+
+  if (cells.size === 0) return null;
+
+  let coveredCells = 0;
+  let minCellLat = Infinity, maxCellLat = -Infinity;
+  let minCellLng = Infinity, maxCellLng = -Infinity;
+
+  for (const [key, cell] of cells) {
+    if (cell.sum / cell.count >= -100) coveredCells += 1;
+
+    const [latStr, lngStr] = key.split(",");
+    const clat = parseFloat(latStr);
+    const clng = parseFloat(lngStr);
+    if (clat < minCellLat) minCellLat = clat;
+    if (clat > maxCellLat) maxCellLat = clat;
+    if (clng < minCellLng) minCellLng = clng;
+    if (clng > maxCellLng) maxCellLng = clng;
+  }
+
+  const MIN_CELLS_SIDE = 10;
+  let cellLatSpan = maxCellLat - minCellLat;
+  let cellLngSpan = maxCellLng - minCellLng;
+
+  if (cellLatSpan < step * MIN_CELLS_SIDE) {
+    const center = (minCellLat + maxCellLat) / 2;
+    const halfSpan = (step * MIN_CELLS_SIDE) / 2;
+    minCellLat = center - halfSpan;
+    maxCellLat = center + halfSpan;
+  }
+  if (cellLngSpan < step * MIN_CELLS_SIDE) {
+    const center = (minCellLng + maxCellLng) / 2;
+    const halfSpan = (step * MIN_CELLS_SIDE) / 2;
+    minCellLng = center - halfSpan;
+    maxCellLng = center + halfSpan;
+  }
+
+  const nLats = Math.max(1, Math.round((maxCellLat - minCellLat) / step) + 1);
+  const nLngs = Math.max(1, Math.round((maxCellLng - minCellLng) / step) + 1);
+  const totalAreaCells = nLats * nLngs;
+
+  return (coveredCells / totalAreaCells) * 100;
+}
+
 function computeOverviewMetrics(rows) {
   if (!rows.length) return OVERVIEW_FALLBACK;
 
@@ -341,7 +403,7 @@ function buildCitySummaries(rows) {
         city_label: entry.city_label,
         mean_rsrp: metrics.mean_rsrp,
         mean_rsrq: metrics.mean_rsrq,
-        coverage_quality_percent: metrics.coverage_quality_percent,
+        coverage_quality_percent: computeSpatialCoverageQuality(entry.rows) ?? metrics.coverage_quality_percent,
         measurements_density: metrics.measurements_density,
         devices_count: metrics.devices_count,
         detected_cells_count: metrics.detected_cells_count,

@@ -336,7 +336,7 @@ function ReportsPage({ activePage, onNavigate, apiMode, onApiModeChange }) {
             <tbody>
               {citySummaries.map((city) => (
                 <tr key={city.city_label}>
-                  <td>{city.city}</td>
+                  <td title={city.city}>{city.city.length > 22 ? city.city.slice(0, 22) + "…" : city.city}</td>
                   <td>{city.country}</td>
                   <td>{formatNumber(city.coverage_quality_percent, 1)}%</td>
                   <td>{formatNumber(city.measurements_density, 2)}</td>
