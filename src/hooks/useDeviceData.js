@@ -594,9 +594,14 @@ export default function useDeviceData(apiMode = "device") {
           : "all";
         setSelectedOperator(validOperator);
 
+        const mobileSourceMap = {
+          crowdsourced: "measured",
+          predicted: "prediction",
+          both: "all",
+        };
         const mobileFilters = {
           period: periodMap[selectedPeriod] || "all",
-          source: "all",
+          source: mobileSourceMap[dataSourceMode] || "all",
           ...(validOperator !== "all" ? { operator: validOperator } : {}),
         };
 
